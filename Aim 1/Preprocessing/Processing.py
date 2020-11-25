@@ -29,9 +29,13 @@ to_run = {
     'LDA':          False,
     'MAR':          False,
     'Med':          False,
-    'Hx':           False,
+    'Hx':           True,
     'Problem_List': False
 }
+
+
+
+
 
 ##### ADT #####
 if to_run['ADT']:
@@ -49,7 +53,7 @@ if to_run['ADT']:
     # df['total_time']=df['out']-df['in']
 
     # Convert unique unit names to dummie variables
-    cols = df['unit'].unique()
+    cols = pd.get_dummies(df['unit'], drop_first=False).columns
     df[cols] = pd.get_dummies(df['unit'], drop_first=False)
 
     # Drop unused columns
@@ -67,8 +71,14 @@ if to_run['ADT']:
     # Insert identifier column to new dataframe
     d.insert(0, 'mrn_csn_pair', unique_pairs)
 
+    print('\nAdt: \n', d.head())
+
     # Write to processed
     d.to_sql('ADT', processed_conn, if_exists='replace')
+
+
+
+
 
 ##### Demographics #####
 if to_run['Demographics']:
@@ -116,15 +126,20 @@ if to_run['Demographics']:
 
     # Drop all unused features
     df_d = df_d.drop(['admission_datetime', 'discharge_datetime', 'ed_arrival_datetime', 'index',
-                    'charlson_comorbidity_index', 'male', 'mrn', 'csn'], axis=1)
+                    'charlson_comorbidity_index', 'gender', 'mrn', 'csn'], axis=1)
 
-    print(df_d.head())
+    print('\nDemographics: \n',df_d.head())
 
     # Write to processed
     df_d.to_sql('DEMOGRAPHICS', processed_conn, if_exists='replace')
 
+
+
+
+
 ##### Dx #####
 if to_run['Dx']:
+    # Read file
     df = pd.read_sql_query("SELECT * FROM DX", raw_conn, parse_dates=True) 
 
     # Create new lable for mrn, csn pair
@@ -133,12 +148,12 @@ if to_run['Dx']:
     df['mrn_csn_pair'] = df['mrn_csn_pair'].astype(str)
 
     # Load in csv data categorizing diagnoses into stroke types
-    path = "S:\Dehydration_stroke\Team Emerald\Working Data\Preprocessed\Working\Dx_class_annotated.csv"
+    path = "S:\Dehydration_stroke\Team Emerald\Working Data\Preprocessed\Working\Manual_Coding\Annotated\Dx_class_ann.csv"
     df_stroke_classes = pd.read_csv(path)
 
     # Create dictionary to reference stroke types
     a = pd.Series(df_stroke_classes['diagnosis'])
-    b = pd.Series(df_stroke_classes['class'])
+    b = pd.Series(df_stroke_classes['stroke_type'])
     stroke_dict = dict(zip(a.values,b.values))
 
     # Only include patients with a primary or an ED diagnosis
@@ -147,16 +162,76 @@ if to_run['Dx']:
     # Create new stroke class column categorizing diagnosis based on dictionary
     df['stroke_class'] = df['diagnosis'].apply(lambda x: stroke_dict[x])
 
+    # Convert stroke classes to dummy variables
+    dummies = pd.get_dummies(df['stroke_class'])
+    df[['hemorrhagic', 'ischemic', 'probable']] = dummies.drop('I', axis=1)
+    df.head()
+
     # Drop unnecessary columns
     df = df.reset_index()
-
     df = df.drop(['level_0', 'mrn', 'csn', 'index', 'icd9', 'icd10', 
-                'diagnosis', 'primary_dx', 'ed_dx'], axis=1)
+                'diagnosis', 'primary_dx', 'ed_dx', 'stroke_class'], axis=1)
 
-    print(df.head())
+    print('\nDx: \n',df.head())
 
     # Write to processed
     df.to_sql('DX', processed_conn, if_exists='replace')
+
+
+
+
+
+##### Hx #####
+if to_run['Hx']:
+    df = pd.read_sql_query("SELECT * FROM HX", raw_conn, parse_dates=True)
+
+    # Create new lable for mrn, csn pair
+    df['mrn_csn_pair'] = list(zip(df.mrn,df.csn))
+    df = df.sort_values('mrn_csn_pair')
+    df['mrn_csn_pair'] = df['mrn_csn_pair'].astype(str)
+
+    # Load in csv data categorizing descriptions into categories
+    path = "S:\Dehydration_stroke\Team Emerald\Working Data\Preprocessed\Working\Manual_Coding\Annotated\Hx_ann.csv"
+    hx_categories = pd.read_csv(path)
+
+    # DROP TUBERCULIN TEST REACTION; NOT A KEY IN THE HX_ANN
+    # REMOVE ONCE FIXED
+    df = df.drop(df[df['description']=='Tuberculin test reaction']['index'])
+
+    # Create dictionary to map descriptions to categories
+    a = pd.Series(hx_categories['description'])
+    b = pd.Series(hx_categories['Comorbidity'])
+    hx_dict = dict(zip(a.values,b.values))
+
+    # Create new feature with hx class
+    df['hx_class'] = df['description'].apply(lambda x: str(hx_dict[x]))
+
+    # Convert hx class feature to dummies
+    cols = pd.get_dummies(df['hx_class']).columns
+    df[cols] = pd.get_dummies(df['hx_class'])
+    df = df.drop(['index','mrn','csn','description','resolved_datetime',
+                'icd10','hx_class'], axis=1)
+
+    # Identify unique pairs
+    unique_pairs = df['mrn_csn_pair'].unique()
+
+    # Iterate through unique pairs to gather units for each individual patient
+    d = pd.DataFrame(columns=cols)
+    for patient in unique_pairs:
+        series = df[df['mrn_csn_pair'] == patient][cols].sum()
+        d = d.append(series, ignore_index=True)
+    d = d.rename(columns = {'nan':'other diseases'})
+
+    # Insert identifier column to new dataframe
+    d.insert(0, 'mrn_csn_pair', unique_pairs)
+
+    print('\nDx: \n', d.head())
+
+    # Write to processed
+    d.to_sql('HX', processed_conn, if_exists='replace')
+
+
+
 
 ##### Feeding #####
 if to_run['Feeding']:

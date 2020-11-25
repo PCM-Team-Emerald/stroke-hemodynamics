@@ -164,8 +164,7 @@ if to_run['Dx']:
 
     # Convert stroke classes to dummy variables
     dummies = pd.get_dummies(df['stroke_class'])
-    df[['hemorrhagic', 'ischemic', 'probable']] = dummies.drop('I', axis=1)
-    df.head()
+    df[['hemorrhagic', 'ischemic', 'no_stroke', 'probable']] = dummies
 
     # Drop unnecessary columns
     df = df.reset_index()
@@ -176,6 +175,7 @@ if to_run['Dx']:
 
     # Write to processed
     df.to_sql('DX', processed_conn, if_exists='replace')
+
 
 
 
@@ -225,7 +225,7 @@ if to_run['Hx']:
     # Insert identifier column to new dataframe
     d.insert(0, 'mrn_csn_pair', unique_pairs)
 
-    print('\nDx: \n', d.head())
+    print('\nHx: \n', d.head())
 
     # Write to processed
     d.to_sql('HX', processed_conn, if_exists='replace')

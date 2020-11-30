@@ -26,7 +26,7 @@ to_run = {
     'Flowsheet':    False,
     'IO_Flowsheet': False,
     'Labs':         False,
-    'LDA':          False,
+    'LDA':          True,
     'MAR':          False,
     'Med':          False,
     'Hx':           True,
@@ -47,14 +47,22 @@ if to_run['ADT']:
     df = df.sort_values('mrn_csn_pair')
     df['mrn_csn_pair'] = df['mrn_csn_pair'].astype(str)
 
-    # # Calculate difference in admission and discharge time
-    # df['in']=pd.to_datetime(df['in'])
-    # df['out']=pd.to_datetime(df['out'])
-    # df['total_time']=df['out']-df['in']
+    # Load in manual coding to categorize unit classes
+    path = "S:\\Dehydration_stroke\\Team Emerald\\Working Data\\Preprocessed\\Working\\Manual_Coding\\Annotated\\Units_ann.csv"
+    units_classes = pd.read_csv(path)
+
+    # Create dictionary to reference stroke types
+    a = pd.Series(units_classes['unit'])
+    b = pd.Series(units_classes['Unit'])
+    unit_dict = dict(zip(a.values,b.values))
+
+    # Create new feature column categorizing units
+    df['Unit'] = df['unit'].apply(lambda x: unit_dict[x])
+    df['Unit'] = df['Unit'].apply(lambda x: 'Other' if str(x) == 'nan' else x)
 
     # Convert unique unit names to dummie variables
-    cols = pd.get_dummies(df['unit'], drop_first=False).columns
-    df[cols] = pd.get_dummies(df['unit'], drop_first=False)
+    cols = pd.get_dummies(df['Unit'], drop_first=False).columns
+    df[cols] = pd.get_dummies(df['Unit'], drop_first=False)
 
     # Drop unused columns
     df = df.drop(['index','mrn','csn','unit','in','out'], axis=1)
@@ -81,57 +89,92 @@ if to_run['ADT']:
 
 
 ##### Demographics #####
-if to_run['Demographics']:
-    # Read file
-    df_d = pd.read_sql('SELECT * FROM DEMOGRAPHICS', raw_conn, parse_dates=True)
-    print(dat.head())
+# Function to extract CCI score from string
+def cci(s):
+    if str(s) == 'None':
+        return None
+    val = s.split(':')
+    return int(val[-1])
 
-    # Processing
+# Function to convert time delta into minutes
+def timedelta_to_min(time):
+    days = time.days
+    minutes = time.seconds//60
+    minutes += days*60*24
+    return minutes
+
+if to_run['Demographics']:
+
+    df = pd.read_sql_query("SELECT * FROM DEMOGRAPHICS", raw_conn, parse_dates=True)
 
     # Create single label combining mrn and csn
-    df_d['mrn_csn_pair'] = list(zip(df_d.mrn,df_d.csn))
-    df_d['mrn_csn_pair'] = df_d['mrn_csn_pair'].astype(str)
+    df['mrn_csn_pair'] = list(zip(df.mrn,df.csn))
+    df['mrn_csn_pair'] = df['mrn_csn_pair'].astype(str)
 
     # Calculate difference in admission and discharge time
-    df_d['admission_datetime']=pd.to_datetime(df_d['admission_datetime'])
-    df_d['discharge_datetime']=pd.to_datetime(df_d['discharge_datetime'])
-    df_d['time_in_hospital_minutes']=df_d['discharge_datetime']-df_d['admission_datetime']
-
-    # Function to convert time delta into minutes
-    def timedelta_to_min(time):
-        days = time.days
-        minutes = time.seconds//60
-        minutes += days*60*24
-        return minutes
+    df['admission_datetime']=pd.to_datetime(df['admission_datetime'])
+    df['discharge_datetime']=pd.to_datetime(df['discharge_datetime'])
+    df['time_in_hospital_minutes']=df['discharge_datetime']-df['admission_datetime']
 
     # Convert the total hospital stay to minutes
-    df_d['time_in_hospital_minutes']=df_d['time_in_hospital_minutes'].apply(timedelta_to_min)
+    df['time_in_hospital_minutes']=df['time_in_hospital_minutes'].apply(timedelta_to_min)
 
     # Create dummy fariable for gender
-    df_d['male'] = pd.get_dummies(df_d['gender'], drop_first=True)
+    df['male'] = pd.get_dummies(df['gender'], drop_first=True)
 
     # Group all patients with ages over 90
-    df_d['age'] = df_d['age'].apply(lambda x:'90' if x == '90+' else x)
-    df_d['age'] = pd.to_numeric(df_d['age'])
-
-    # Function to extract CCI score from string
-    def cci(s):
-        if str(s) == 'None':
-            return None
-        val = s.split(':')
-        return int(val[-1])
+    df['age'] = df['age'].apply(lambda x:'90' if x == '90+' else x)
+    df['age'] = pd.to_numeric(df['age'])
 
     # Create new feature to return CCI score
-    df_d['cci'] = df_d['charlson_comorbidity_index'].apply(cci)
+    df['cci'] = df['charlson_comorbidity_index'].apply(cci)
 
-    # Drop all unused features
-    df_d = df_d.drop(['admission_datetime', 'discharge_datetime', 'ed_arrival_datetime', 'index',
-                    'charlson_comorbidity_index', 'gender', 'mrn', 'csn'], axis=1)
+    # Load in units manual coding file
+    path = "S:\\Dehydration_stroke\\Team Emerald\\Working Data\\Preprocessed\\Working\\Manual_Coding\\Annotated\\Units_ann.csv"
+    units_classes = pd.read_csv(path)
 
-    print('\nDemographics: \n',df_d.head())
+    # Create dictionary to reference department units
+    a = pd.Series(units_classes['unit'])
+    b = pd.Series(units_classes['Unit'])
+    unit_dict = dict(zip(a.values,b.values))
+    unit_dict['BVBCP BURTON 2'] = 'Floor'
 
+    # Create new feature column categorizing units
+    df['admit_unit'] = df['admit_department'].apply(lambda x: unit_dict[x])
+    df['discharge_unit'] = df['discharge_department'].apply(lambda x: unit_dict[x])
+    
+    # Convert unique unit names to dummie variables
+    admit_names = ['admit_floor', 'admit_ICU', 'admit_stroke_unit']
+    discharge_names = ['discharge_floor', 'discharge_ICU', 'discharge_stroke_unit']
+    df[admit_names] = pd.get_dummies(df['admit_unit'], drop_first=False)
+    df[discharge_names] = pd.get_dummies(df['discharge_unit'], drop_first=False)
+
+    # Load in services manual coding file
+    services_path = "S:\\Dehydration_stroke\\Team Emerald\\Working Data\\Preprocessed\\Working\\Manual_Coding\\Annotated\\Services_ann.csv"
+    services_classes = pd.read_csv(services_path)
+
+    a = pd.Series(services_classes['admit_service'])
+    b = pd.Series(services_classes['Service'])
+    service_dict = dict(zip(a.values,b.values))
+
+    df['admit_service'] = df['admit_service'].apply(lambda x: service_dict[x])
+    df['Neuro'] = pd.get_dummies(df['admit_service'])
+
+    # Create dummy variables to categorize race
+    cols = ['White or Caucasian', 'Black or African American', 'Other', 'Declined', 'Unknown',
+           'American Indian or Alaskan Native', 'Asian', 'Native Hawaiian or Other Pacific Islander',
+           ]
+    for i in range(len(cols)):
+        df[cols[i]] = df['race'].apply(lambda x: 1 if cols[i] in x else 0)
+        
+    # Drop all other unused features
+    df = df.drop(['admission_datetime', 'discharge_datetime', 'ed_arrival_datetime', 'index',
+                     'charlson_comorbidity_index', 'gender', 'mrn', 'csn', 'admit_department',
+                     'discharge_department', 'admit_unit', 'discharge_unit',
+                     'admit_service', 'race'], axis=1)
+    
     # Write to processed
-    df_d.to_sql('DEMOGRAPHICS', processed_conn, if_exists='replace')
+    df.to_sql('DEMOGRAPHICS', processed_conn, if_exists='replace')
 
 
 
@@ -180,9 +223,9 @@ if to_run['Dx']:
 
 
 
-
 ##### Hx #####
 if to_run['Hx']:
+    # Read file
     df = pd.read_sql_query("SELECT * FROM HX", raw_conn, parse_dates=True)
 
     # Create new lable for mrn, csn pair
@@ -194,14 +237,11 @@ if to_run['Hx']:
     path = "S:\Dehydration_stroke\Team Emerald\Working Data\Preprocessed\Working\Manual_Coding\Annotated\Hx_ann.csv"
     hx_categories = pd.read_csv(path)
 
-    # DROP TUBERCULIN TEST REACTION; NOT A KEY IN THE HX_ANN
-    # REMOVE ONCE FIXED
-    df = df.drop(df[df['description']=='Tuberculin test reaction']['index'])
-
     # Create dictionary to map descriptions to categories
     a = pd.Series(hx_categories['description'])
     b = pd.Series(hx_categories['Comorbidity'])
     hx_dict = dict(zip(a.values,b.values))
+    hx_dict['Tuberculin test reaction']=float('NaN')
 
     # Create new feature with hx class
     df['hx_class'] = df['description'].apply(lambda x: str(hx_dict[x]))
@@ -229,6 +269,60 @@ if to_run['Hx']:
 
     # Write to processed
     d.to_sql('HX', processed_conn, if_exists='replace')
+
+
+
+
+
+##### LDA #####
+if to_run['LDA']:
+    # Read file
+    df = pd.read_sql_query("SELECT * FROM LDA", raw_conn, parse_dates=True)
+
+    # Create new lable for mrn, csn pair
+    df['mrn_csn_pair'] = list(zip(df.mrn,df.csn))
+    df = df.sort_values('mrn_csn_pair')
+    df['mrn_csn_pair'] = df['mrn_csn_pair'].astype(str)
+
+    # Drop rows that do not have a raw LDA Name
+    df = df.drop(df[df['lda_name'].isnull()].index)
+
+    # Load in csv data categorizing descriptions into categories
+    path = "S:\Dehydration_stroke\Team Emerald\Working Data\Preprocessed\Working\Manual_Coding\Annotated\LDA_names.csv"
+    lda_names = pd.read_csv(path)
+
+    # Create dictionary to map descriptions to categories
+    a = pd.Series(lda_names['lda_name'])
+    b = pd.Series(lda_names['Unnamed: 2'])
+    lda_dict = dict(zip(a.values,b.values))
+
+    # Create new feature with lda class
+    df['lda_names'] = df['lda_name'].apply(lambda x: str(lda_dict[x]))
+
+    # Convert hx class feature to dummies
+    cols = pd.get_dummies(df['lda_names']).columns
+    df[cols] = pd.get_dummies(df['lda_names'])
+    df = df.drop(['index','mrn','csn','placed_datetime','removed_datetime',
+                'template_name','lda_name', 'lda_measurements_and_assessments',
+                'lda_names'], axis=1)
+
+    # Identify unique pairs
+    unique_pairs = df['mrn_csn_pair'].unique()
+
+    # Iterate through unique pairs to gather units for each individual patient
+    d = pd.DataFrame(columns=cols)
+    for patient in unique_pairs:
+        series = df[df['mrn_csn_pair'] == patient][cols].sum()
+        d = d.append(series, ignore_index=True)
+
+    # Insert identifier column to new dataframe
+    d.insert(0, 'mrn_csn_pair', unique_pairs)
+
+    print('\nLDA: \n', d.head())
+
+    # Write to processed
+    d.to_sql('LDA', processed_conn, if_exists='replace')
+
 
 
 

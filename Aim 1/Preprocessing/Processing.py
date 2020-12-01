@@ -5,7 +5,6 @@ import numpy as np
 import pandas as pd
 pd.set_option('display.max_columns',None)
 import sqlite3
-import dateutil.parser as parser
 
 # Config file
 with open('cfg.json') as json_file:
@@ -21,74 +20,61 @@ processed_conn = sqlite3.connect(processed_url)
 to_run = {
     'ADT':          False,
     'Demographics': False,
-    'Dx':           True,
-    'Feeding':      True,
+    'Dx':           False,
+    'Feeding':      False,
     'Flowsheet':    True,
-    'IO_Flowsheet': True,
-    'Labs':         True,
-    'LDA':          True,
-    'MAR':          True,
-    'Med':          True,
-    'Hx':           True,
-    'Problem_List': True
+    'IO_Flowsheet': False,
+    'Labs':         False,
+    'LDA':          False,
+    'MAR':          False,
+    'Med':          False,
+    'Hx':           False,
+    'Problem_List': False
 }
-
-##### ADT #####
-if to_run['ADT']:
-    # Read file
-    dat = pd.read_sql('SELECT * FROM ADT', raw_conn, parse_dates=True, index_col='index')
-    print(dat.head())
-
-    # Processing
-    # Unit descriptions
-    #TODO: create col for icu vs neuro floor vs other floor?
-
-    # Duration
-    dat['duration'] = (dat['out'] - dat['in']) / np.timedelta64(1,'h')
-
-    # Write to processed
-    dat.to_sql('ADT', processed_conn, if_exists='replace')
-
-##### Demographics #####
-if to_run['Demographics']:
-    # Read file
-    dat = pd.read_sql('SELECT * FROM DEMOGRAPHICS', raw_conn, parse_dates=True, index_col='index')
-    print(dat.head())
-
-    # Processing
-
-
-    # Charlson
-    dat['charlson_comorbidity_index'] = dat['charlson_comorbidity_index'].apply(lambda x: np.nan if type(x)==type(None) else float(x[x.find(':')+1:]))
-
-    print(dat.head())
-    # Write to processed
-    dat.to_sql('DEMOGRAPHICS', processed_conn, if_exists='replace')
-
-##### Dx #####
-if to_run['Dx']:
-    pass
-
-##### Feeding #####
-if to_run['Feeding']:
-    pass
 
 ##### Flowsheet #####
 if to_run['Flowsheet']:
     # Read file
     dat = pd.read_sql('SELECT * FROM FLOWSHEET', raw_conn, parse_dates=True, index_col='index')
-    print(dat.head())
 
+    # Read manual coding
+    mc = pd.read_csv('S:/Dehydration_stroke/Team Emerald/Working Data/Preprocessed/Working/Manual_Coding/Annotated/Flowsheet_names.csv')
+
+    dat = pd.merge(dat,mc,how='left',on='flowsheet_row_name')
+    dat = dat[dat['Name'].notnull()]
+    dat_pivoted = pd.pivot_table(dat,index=['mrn','csn','recorded_datetime'],
+                                 columns='Name',values='value',aggfunc='first')
     # Processing
-    dat.drop(columns=['template_name'], inplace=True)
+    to_keep = ['bp','pulse_ox','pulse','temp']
 
-    # Pivot
-    dat = pd.pivot_table(dat,index=['mrn','csn','recorded_datetime'], column='flowsheet_row_name', value='value')
+    dat_pivoted = dat_pivoted[to_keep]
+    dat_pivoted.dropna(how='all',inplace=True)
+    bps = dat_pivoted['bp'].str.split('/', n=1, expand=True)
+    dat_pivoted['sbp'] = bps[0]
+    dat_pivoted['dbp'] = bps[1]
+    dat_pivoted.drop(columns=['bp'], inplace=True)
+    for c in dat_pivoted.columns:
+        dat_pivoted[c] = dat_pivoted[c].astype(float)
 
-    print(dat.head())
+    # Convert temp F to C
+    dat_pivoted['temp'] = dat_pivoted['temp'].apply(lambda x: x if x < 70 else (x-32)*5/9)
+
+    # Remove extreme values
+    dat_pivoted['temp'] = dat_pivoted['temp'].apply(lambda x: np.NaN if x < 30 or x > 45 else x)
+    dat_pivoted['pulse_ox'] = dat_pivoted['pulse_ox'].apply(lambda x: np.NaN if x > 100 else x)
+    dat_pivoted['pulse'] = dat_pivoted['pulse'].apply(lambda x: np.NaN if x < 30 or x > 300 else x)
+    dat_pivoted['sbp'] = dat_pivoted['sbp'].apply(lambda x: np.NaN if x < 50 or x > 300 else x)
+    dat_pivoted['dbp'] = dat_pivoted['dbp'].apply(lambda x: np.NaN if x < 10 or x > 200 else x)
+
+    # Dist plots
+    import matplotlib.pyplot as plt
+    for c in dat_pivoted.columns:
+        plt.hist(dat_pivoted[c])
+        plt.title(c)
+        plt.show()
+
+    # Melt
+    dat_melted = dat_pivoted.reset_index(drop=False).melt(id_vars=['mrn','csn','recorded_datetime'])
+
     # Write to processed
-    dat.to_sql('FLOWSHEET', processed_conn, if_exists='replace')
-
-##### IO Flowsheet #####
-if to_run['IO_Flowsheet']:
-    pass
+    dat_melted.to_sql('FLOWSHEET', processed_conn, if_exists='replace', index=False)

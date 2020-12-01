@@ -29,19 +29,19 @@ def datetimeColToISO(df, dt_cols):
     return df
 
 to_run = {
-    'ADT':          True,
-    'Demographics': True,
-    'Dx':           True,
-    'Feeding':      True,
+    'ADT':          False,
+    'Demographics': False,
+    'Dx':           False,
+    'Feeding':      False,
     'Flowsheet':    True,
-    'IO_Flowsheet': True,
+    'IO_Flowsheet': False,
     'Labs':         False,
-    'LDA':          True,
-    'MAR':          True,
-    'Med':          True,
-    'Hx':           True,
-    'Problem_List': True,
-    'Neuro':        True
+    'LDA':          False,
+    'MAR':          False,
+    'Med':          False,
+    'Hx':           False,
+    'Problem_List': False,
+    'Neuro':        False
 }
 
 ##### ADT #####
@@ -157,7 +157,7 @@ if to_run['IO_Flowsheet']:
 ##### Labs #####
 if to_run['Labs']:
     # Read file
-    dat = pd.read_table(data_dir + '/Lab_timestamped_11132020.txt', sep='|')
+    dat = pd.read_table(data_dir + '/Labs_1007.txt', sep='|')
 
     print(dat.columns)
 

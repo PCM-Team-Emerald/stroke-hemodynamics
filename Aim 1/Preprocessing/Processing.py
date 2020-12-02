@@ -104,7 +104,7 @@ def timedelta_to_min(time):
     return minutes
 
 if to_run['Demographics']:
-
+    # Read file
     df = pd.read_sql_query("SELECT * FROM DEMOGRAPHICS", raw_conn, parse_dates=True)
 
     # Create single label combining mrn and csn
@@ -168,11 +168,13 @@ if to_run['Demographics']:
         df[cols[i]] = df['race'].apply(lambda x: 1 if cols[i] in x else 0)
         
     # Drop all other unused features
-    df = df.drop(['admission_datetime', 'discharge_datetime', 'ed_arrival_datetime', 'index',
-                     'charlson_comorbidity_index', 'gender', 'mrn', 'csn', 'admit_department',
+    df = df.drop(['ed_arrival_datetime', 'index', 'charlson_comorbidity_index', 
+                     'gender', 'mrn', 'csn', 'admit_department',
                      'discharge_department', 'admit_unit', 'discharge_unit',
                      'admit_service', 'race'], axis=1)
     
+    print('\nDemographics: \n', df.head())
+
     # Write to processed
     df.to_sql('DEMOGRAPHICS', processed_conn, if_exists='replace')
 

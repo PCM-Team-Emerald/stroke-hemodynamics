@@ -29,19 +29,20 @@ def datetimeColToISO(df, dt_cols):
     return df
 
 to_run = {
-    'ADT':          True,
-    'Demographics': True,
-    'Dx':           True,
-    'Feeding':      True,
-    'Flowsheet':    True,
-    'IO_Flowsheet': True,
+    'ADT':          False,
+    'Demographics': False,
+    'Dx':           False,
+    'Feeding':      False,
+    'Flowsheet':    False,
+    'IO_Flowsheet': False,
     'Labs':         False,
-    'LDA':          True,
-    'MAR':          True,
-    'Med':          True,
-    'Hx':           True,
-    'Problem_List': True,
-    'Neuro':        True
+    'LDA':          False,
+    'MAR':          False,
+    'Med':          False,
+    'Hx':           False,
+    'Problem_List': False,
+    'Neuro':        False,
+    'Dispo':        True
 }
 
 ##### ADT #####
@@ -157,7 +158,7 @@ if to_run['IO_Flowsheet']:
 ##### Labs #####
 if to_run['Labs']:
     # Read file
-    dat = pd.read_table(data_dir + '/Lab_timestamped_11132020.txt', sep='|')
+    dat = pd.read_table(data_dir + '/Labs_1007.txt', sep='|')
 
     print(dat.columns)
 
@@ -272,14 +273,14 @@ if to_run['Problem_List']:
 ##### Neuro flowsheet #####
 if to_run['Neuro']:
     # Read file
-    dat = pd.read_table(data_dir + '/flowsheet_neu_am_11132020.txt', sep='|')
+    dat = pd.read_table(data_dir + '/Neurological_flowsheet.txt', sep='|')
 
     # Drop unnecesary cols, rename
     # Col names are wrong, overriding here:
     dat.columns = ['mrn', 'csn', 'recorded_datetime_RAW',
        'recorded_datetime', 'value',
-       'template_name', 'flowsheet_row_name','none1','none2']
-    dat.drop(columns=['recorded_datetime_RAW','none1','none2'], inplace=True)
+       'template_name', 'flowsheet_row_name']
+    dat.drop(columns=['recorded_datetime_RAW'], inplace=True)
 
     # Convert datetimes to ISO
     datetime_cols = ['recorded_datetime']
@@ -289,4 +290,19 @@ if to_run['Neuro']:
     data_dict.update({'Neuro': dat.dtypes.to_dict()})
 
     # Save to db
+    print('Neuro',dat.shape)
     dat.to_sql('NEURO', conn, if_exists='replace')
+
+##### Dispo #####
+if to_run['Dispo']:
+    # Read file
+    dat = pd.read_table(data_dir + '/Disch_disposition.txt', sep='|')
+
+    # Drop unnecesary cols, rename
+    dat.columns = ['mrn', 'csn', 'deceased', 'disposition']
+
+    # Add to data dict
+    data_dict.update({'Dispo': dat.dtypes.to_dict()})
+
+    # Save to db
+    dat.to_sql('DISPO', conn, if_exists='replace')

@@ -30,9 +30,11 @@ cols_to_get = [
     ('SELECT medication_name FROM MAR UNION SELECT DISTINCT medication_name FROM MED','Med_names'),
     ('SELECT flowsheet_row_name FROM NEURO', 'neuro_names'),
     ('SELECT icd10, description FROM PROBLEM_LIST','Problem_List')
+]
 
-
-
+cols_to_get = [
+    ('SELECT disposition FROM DISPO','Dispo_names'),
+    ('SELECT flowsheet_row_name FROM NEURO', 'neuro_names')
 ]
 
 for c in cols_to_get:

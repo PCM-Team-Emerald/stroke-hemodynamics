@@ -26,12 +26,12 @@ to_run = {
     'Feeding':      False,
     'Flowsheet':    False,
     'IO_Flowsheet': False,
-    'Labs':         True,
+    'Labs':         False,
     'LDA':          False,
     'MAR':          False,
     'Med':          False,
     'Hx':           False,
-    'Problem_List': False,
+    'Problem_List': True,
     'Neuro':        False,
     'Dispo':        False
 }
@@ -604,4 +604,22 @@ if to_run['Labs']:
 
 ##### Problem List #####
 if to_run['Problem_List']:
-    pass
+    # Read file
+    dat = pd.read_sql('SELECT * FROM PROBLEM_LIST', raw_conn, parse_dates=True, index_col='index')
+
+    # Read manual coding
+    mc = pd.read_csv(
+        'S:/Dehydration_stroke/Team Emerald/Working Data/Preprocessed/Working/Manual_Coding/Annotated/Hx_ann.csv')
+    dat = pd.merge(dat, mc, how='left', on=['icd10', 'description'])
+    dat = dat[dat['Comorbidity'].notnull()]
+    one_hot = pd.get_dummies(dat['Comorbidity'], prefix='problem_list')
+    dat = dat.join(one_hot)
+
+    # MRN, CSN Pairs
+    dat['mrn_csn_pair'] = dat.apply(lambda x: '({}, {})'.format(x['mrn'], x['csn']), axis=1)
+    
+    dat.drop(columns=['mrn','csn','description','noted_datetime','resolved_datetime','icd10','0','Comorbidity'], inplace=True)
+    dat = dat.groupby('mrn_csn_pair').agg('max')
+
+    # Write to processed
+    dat.to_sql('PROBLEM_LIST', processed_conn, if_exists='replace', index=False)

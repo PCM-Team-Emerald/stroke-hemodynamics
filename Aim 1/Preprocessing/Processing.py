@@ -26,14 +26,14 @@ to_run = {
     'Feeding':      False,
     'Flowsheet':    False,
     'IO_Flowsheet': False,
-    'Labs':         False,
+    'Labs':         True,
     'LDA':          False,
     'MAR':          False,
     'Med':          False,
     'Hx':           False,
     'Problem_List': False,
     'Neuro':        False,
-    'Dispo':        True
+    'Dispo':        False
 }
 
 ##### Flowsheet #####
@@ -531,5 +531,77 @@ if to_run['LDA']:
 
 ##### IO Flowsheet #####
 if to_run['IO_Flowsheet']:
-    pass
+    # Read file
+    dat = pd.read_sql('SELECT * FROM IO_FLOWSHEET', raw_conn, parse_dates=True, index_col='index')
 
+    # Read manual coding
+    mc = pd.read_csv(
+        'S:/Dehydration_stroke/Team Emerald/Working Data/Preprocessed/Working/Manual_Coding/Annotated/IO_Flowsheet_names.csv')
+    dat = pd.merge(dat, mc, how='left', on='flowsheet_row_name')
+    dat_pivoted = pd.pivot_table(dat, index=['mrn', 'csn', 'recorded_datetime'],
+                                 columns='Name', values='value', aggfunc='first')
+
+    # Processing
+    to_keep = ['iv_volume',
+               'urine_net_output',
+               'urine_output',
+               'oral_intake',
+               'tube_feeding_intake',
+               'feeding_meds',
+               'intake_ml',
+               'tube_flushes',
+               'piggyback_iv_volume',
+               'urine_output',
+               'saline_flush',
+               'intake_ml',
+               'intravenous_intake',
+               'stool_amount',
+               'free_water']
+
+    dat_pivoted = dat_pivoted[to_keep]
+    dat_pivoted.dropna(how='all', inplace=True)
+
+    # Melt
+    dat_melted = dat_pivoted.reset_index(drop=False).melt(id_vars=['mrn', 'csn', 'recorded_datetime'])
+
+    # MRN, CSN Pairs
+    dat_melted['mrn_csn_pair'] = dat_melted.apply(lambda x: '({}, {})'.format(x['mrn'], x['csn']), axis=1)
+
+    # Write to processed
+    dat_melted.to_sql('IO_FLOWSHEET', processed_conn, if_exists='replace', index=False)
+
+##### Labs #####
+if to_run['Labs']:
+    # Read file
+    dat = pd.read_sql('SELECT * FROM LABS', raw_conn, parse_dates=True, index_col='index')
+
+    # Read manual coding
+    mc = pd.read_csv(
+        'S:/Dehydration_stroke/Team Emerald/Working Data/Preprocessed/Working/Manual_Coding/Annotated/Lab_names.csv')
+    dat = pd.merge(dat, mc, how='left', on=['order_description', 'component_name', 'component_base_name'])
+    dat_pivoted = pd.pivot_table(dat, index=['mrn', 'csn', 'result_datetime', 'units'],
+                                 columns='Name', values='value_numeric', aggfunc='first')
+
+    # Processing
+    to_keep = [
+        'Na', 'K', 'CL', 'CO2', 'BUN', 'CREATININE', 'GLU',
+        'HGB', 'HCT', 'WBC', 'PLT',
+        'CALCIUM', 'PHOS', 'PROT', 'ALBUMIN', 'AST', 'ALT', 'LDH', 'ALKPHOS', 'BILITOT', 'ANIONGAP',
+        'LABPT', 'PTT'
+               ]
+
+    dat_pivoted = dat_pivoted[to_keep]
+    dat_pivoted.dropna(how='all', inplace=True)
+
+    # Melt
+    dat_melted = dat_pivoted.reset_index(drop=False).melt(id_vars=['mrn', 'csn', 'result_datetime', 'units'])
+
+    # MRN, CSN Pairs
+    dat_melted['mrn_csn_pair'] = dat_melted.apply(lambda x: '({}, {})'.format(x['mrn'], x['csn']), axis=1)
+
+    # Write to processed
+    dat_melted.to_sql('IO_FLOWSHEET', processed_conn, if_exists='replace', index=False)
+
+##### Problem List #####
+if to_run['Problem_List']:
+    pass

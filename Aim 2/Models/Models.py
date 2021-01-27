@@ -70,17 +70,3 @@ def metrics(y_test, raw_predictions, predictions):
     plt.xlabel('Recall')
     plt.ylabel('Precision')
     plt.show()
-
-from sklearn.datasets import load_breast_cancer
-
-X,y = load_breast_cancer(return_X_y=True)
-m = LogisticRegressionModel()
-#m = RandomForestModel()
-m.fit(X,y)
-raw_preds, preds, score = m.predict(X,y)
-l = []
-for i in range(len(raw_preds)):
-    l.append(raw_preds[i][1])
-
-metrics(y, l, preds)
-        

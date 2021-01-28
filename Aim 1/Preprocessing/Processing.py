@@ -413,7 +413,7 @@ if to_run['Dx']:
 
     # Drop unnecessary columns
     df = df.reset_index()
-    df = df.drop(['level_0', 'mrn', 'csn', 'icd9', 'icd10',
+    df = df.drop(['mrn', 'csn', 'icd9', 'icd10',
                 'diagnosis', 'primary_dx', 'ed_dx', 'stroke_class'], axis=1)
 
     print('\nDx: \n',df.head())

@@ -16,7 +16,7 @@ with open('cfg.json') as json_file:
 processed_url = cfg['WORKING_DATA_DIR'] + '/Preprocessed/Working/Processed.db'
 processed_conn = sqlite3.connect(processed_url)
 
-dat = pd.read_sql_query("SELECT mrn_csn_pair FROM DEMOGRAPHICS", processed_conn, parse_dates=True)
+dat = pd.read_sql_query("SELECT mrn_csn_pair, time_in_hospital_minutes FROM DEMOGRAPHICS", processed_conn, parse_dates=True)
 
 # Primary stroke diagnosis
 dx = pd.read_sql_query('SELECT * FROM DX', processed_conn, parse_dates=True)

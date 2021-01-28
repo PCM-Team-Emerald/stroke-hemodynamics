@@ -2,6 +2,7 @@
 
 # Imports
 import pandas as pd
+pd.set_option('display.max_columns',None)
 import numpy as np
 import matplotlib.pyplot as plt
 import json
@@ -40,9 +41,7 @@ for m in mrn_csns:
               'glasgow_eye_opening',
               'glasgow_motor_response',
               'glasgow_verbal_response',
-              'cam_icu',
-              'consciousness',
-              'orientation']:
+              'cam_icu']:
         dat_sub = dat[(dat['mrn_csn_pair'] == m) & (dat['Name'] == v)]
         if dat_sub.shape[0] > 0:
             idx = dat_sub['time_to_discharge'].idxmin()
@@ -50,7 +49,8 @@ for m in mrn_csns:
 
 dat_last = dat.loc[indices]
 
-dat = dat_last[['mrn_csn_pair','Name','value']]
+dat = dat_last[['mrn_csn_pair','Name','value','dispo']]
+dat['value'] = dat['value'].astype(float)
 dat = pd.pivot_table(dat, index='mrn_csn_pair', columns='Name', values='value')
 
 print(dat.count())

@@ -5,44 +5,42 @@ import numpy as np
 import pandas as pd
 pd.set_option('display.max_columns',None)
 import sqlite3
-import dateutil.parser as parser
-
 
 # Config file
 with open('cfg.json') as json_file:
     cfg = json.load(json_file)
 
 # Setup SQLite DB
-data_dir = cfg['WORKING_DATA_DIR'] + '/CCDA_Data'
-raw_url = cfg['WORKING_DATA_DIR'] + '/Preprocessed/Working/Raw.db'
-processed_url = cfg['WORKING_DATA_DIR'] + '/Preprocessed/Working/Processed.db'
-raw_conn = sqlite3.connect(raw_url)
-processed_conn = sqlite3.connect(processed_url)
+raw_dir = os.path.join(cfg['WORKING_DATA_DIR'], 'Preprocessed/Working/Raw.db')
+processed_dir = os.path.join(cfg['WORKING_DATA_DIR'], 'Preprocessed/Working/Processed.db')
+annotated_dir = os.path.join(cfg['WORKING_DATA_DIR'], 'Preprocessed/Working/Manual_Coding/Annotated')
+raw_conn = sqlite3.connect(raw_dir)
+processed_conn = sqlite3.connect(processed_dir)
 
 to_run = {
-    'ADT':          False,
-    'Demographics': False,
-    'Dx':           False,
-    'Feeding':      False,
-    'Flowsheet':    False,
-    'IO_Flowsheet': False,
-    'Labs':         False,
-    'LDA':          False,
-    'MAR':          False,
-    'Med':          False,
-    'Hx':           False,
+    'ADT':          True,
+    'Demographics': True,
+    'Dx':           True,
+    'Feeding':      True,
+    'Flowsheet':    True,
+    'IO_Flowsheet': True,
+    'Labs':         True,
+    'LDA':          True,
+    'MAR':          True,
+    'Med':          True,
+    'Hx':           True,
     'Problem_List': True,
-    'Neuro':        False,
-    'Dispo':        False
+    'Neuro':        True,
+    'Dispo':        True
 }
 
 ##### Flowsheet #####
 if to_run['Flowsheet']:
     # Read file
-    dat = pd.read_sql('SELECT * FROM FLOWSHEET', raw_conn, parse_dates=True, index_col='index')
+    dat = pd.read_sql('SELECT * FROM FLOWSHEET', raw_conn, parse_dates=True)
 
     # Read manual coding
-    mc = pd.read_csv('S:/Dehydration_stroke/Team Emerald/Working Data/Preprocessed/Working/Manual_Coding/Annotated/Flowsheet_names.csv')
+    mc = pd.read_csv(os.path.join(annotated_dir, 'Flowsheet_names.csv'))
     dat = pd.merge(dat,mc,how='left',on='flowsheet_row_name')
     dat_pivoted = pd.pivot_table(dat,index=['mrn','csn','recorded_datetime'],
                                  columns='Name',values='value',aggfunc='first')
@@ -100,11 +98,10 @@ if to_run['Flowsheet']:
 ##### Neuro #####
 if to_run['Neuro']:
     # Read file
-    dat = pd.read_sql('SELECT * FROM NEURO', raw_conn, parse_dates=True, index_col='index')
+    dat = pd.read_sql('SELECT * FROM NEURO', raw_conn, parse_dates=True)
 
     # Read manual coding
-    mc = pd.read_csv(
-        'S:/Dehydration_stroke/Team Emerald/Working Data/Preprocessed/Working/Manual_Coding/Annotated/neuro_names.csv')
+    mc = pd.read_csv(os.path.join(annotated_dir, 'neuro_names.csv'))
 
     dat = pd.merge(dat, mc, how='left', on='flowsheet_row_name')
     dat = dat[dat['Name'].notnull()]
@@ -115,12 +112,17 @@ if to_run['Neuro']:
                'glasgow_eye_opening',
                'glasgow_verbal_response',
                'glasgow_motor_response',
-               'cam_icu',
-               'consciousness',
-               'orientation']
+               'cam_icu']
 
     dat_pivoted = dat_pivoted[to_keep]
     dat_pivoted.dropna(how='all', inplace=True)
+
+    # cam_icu
+    to_replace = ['Negative',
+                  'Positive',
+                  'Unable to Assess']
+    replacing = [0,1, np.NaN]
+    dat_pivoted['cam_icu'] = dat_pivoted['cam_icu'].replace(to_replace, replacing)
 
     # Melt
     dat_melted = dat_pivoted.reset_index(drop=False).melt(id_vars=['mrn', 'csn', 'recorded_datetime'])
@@ -134,11 +136,10 @@ if to_run['Neuro']:
 ##### Dispo #####
 if to_run['Dispo']:
     # Read file
-    dat = pd.read_sql('SELECT * FROM DISPO', raw_conn, parse_dates=True, index_col='index')
+    dat = pd.read_sql('SELECT * FROM DISPO', raw_conn, parse_dates=True)
 
     # Read manual coding
-    mc = pd.read_csv(
-        'S:/Dehydration_stroke/Team Emerald/Working Data/Preprocessed/Working/Manual_Coding/Annotated/Dispo_names.csv')
+    mc = pd.read_csv(os.path.join(annotated_dir, 'Dispo_names.csv'))
 
     dat = pd.merge(dat, mc, how='left', on='disposition')
     dat = dat[dat['Name'].notnull()]
@@ -152,11 +153,10 @@ if to_run['Dispo']:
 ##### Meds #####
 if to_run['MAR']:
     # Read file
-    dat = pd.read_sql('SELECT * FROM MAR', raw_conn, parse_dates=True, index_col='index')
+    dat = pd.read_sql('SELECT * FROM MAR', raw_conn, parse_dates=True)
 
     # Read manual coding
-    mc = pd.read_csv(
-        'S:/Dehydration_stroke/Team Emerald/Working Data/Preprocessed/Working/Manual_Coding/Annotated/med_names.csv')
+    mc = pd.read_csv(os.path.join(annotated_dir, 'med_names.csv'))
 
     dat = pd.merge(dat, mc, how='left', on='medication_name')
 
@@ -252,8 +252,7 @@ if to_run['ADT']:
     df['mrn_csn_pair'] = df['mrn_csn_pair'].astype(str)
 
     # Load in manual coding to categorize unit classes
-    path = "S:\\Dehydration_stroke\\Team Emerald\\Working Data\\Preprocessed\\Working\\Manual_Coding\\Annotated\\Units_ann.csv"
-    units_classes = pd.read_csv(path)
+    units_classes = pd.read_csv(os.path.join(annotated_dir, 'Units_ann.csv'))
 
     # Create dictionary to reference stroke types
     a = pd.Series(units_classes['unit'])
@@ -269,7 +268,7 @@ if to_run['ADT']:
     df[cols] = pd.get_dummies(df['Unit'], drop_first=False)
 
     # Drop unused columns
-    df = df.drop(['index','mrn','csn','unit','in','out'], axis=1)
+    df = df.drop(['mrn','csn','unit','in','out'], axis=1)
 
     # Identify unique pairs
     unique_pairs = df['mrn_csn_pair'].unique()
@@ -286,7 +285,7 @@ if to_run['ADT']:
     print('\nAdt: \n', d.head())
 
     # Write to processed
-    d.to_sql('ADT', processed_conn, if_exists='replace')
+    d.to_sql('ADT', processed_conn, if_exists='replace', index=False)
 
 
 
@@ -334,8 +333,7 @@ if to_run['Demographics']:
     df['cci'] = df['charlson_comorbidity_index'].apply(cci)
 
     # Load in units manual coding file
-    path = "S:\\Dehydration_stroke\\Team Emerald\\Working Data\\Preprocessed\\Working\\Manual_Coding\\Annotated\\Units_ann.csv"
-    units_classes = pd.read_csv(path)
+    units_classes = pd.read_csv(os.path.join(annotated_dir, 'Units_ann.csv'))
 
     # Create dictionary to reference department units
     a = pd.Series(units_classes['unit'])
@@ -354,8 +352,7 @@ if to_run['Demographics']:
     df[discharge_names] = pd.get_dummies(df['discharge_unit'], drop_first=False)
 
     # Load in services manual coding file
-    services_path = "S:\\Dehydration_stroke\\Team Emerald\\Working Data\\Preprocessed\\Working\\Manual_Coding\\Annotated\\Services_ann.csv"
-    services_classes = pd.read_csv(services_path)
+    services_classes = pd.read_csv(os.path.join(annotated_dir, 'Services_ann.csv'))
 
     a = pd.Series(services_classes['admit_service'])
     b = pd.Series(services_classes['Service'])
@@ -372,7 +369,7 @@ if to_run['Demographics']:
         df[cols[i]] = df['race'].apply(lambda x: 1 if cols[i] in x else 0)
         
     # Drop all other unused features
-    df = df.drop(['ed_arrival_datetime', 'index', 'charlson_comorbidity_index', 
+    df = df.drop(['ed_arrival_datetime', 'charlson_comorbidity_index',
                      'gender', 'mrn', 'csn', 'admit_department',
                      'discharge_department', 'admit_unit', 'discharge_unit',
                      'admit_service', 'race'], axis=1)
@@ -380,7 +377,7 @@ if to_run['Demographics']:
     print('\nDemographics: \n', df.head())
 
     # Write to processed
-    df.to_sql('DEMOGRAPHICS', processed_conn, if_exists='replace')
+    df.to_sql('DEMOGRAPHICS', processed_conn, if_exists='replace', index=False)
 
 
 
@@ -397,8 +394,7 @@ if to_run['Dx']:
     df['mrn_csn_pair'] = df['mrn_csn_pair'].astype(str)
 
     # Load in csv data categorizing diagnoses into stroke types
-    path = "S:\Dehydration_stroke\Team Emerald\Working Data\Preprocessed\Working\Manual_Coding\Annotated\Dx_class_ann.csv"
-    df_stroke_classes = pd.read_csv(path)
+    df_stroke_classes = pd.read_csv(os.path.join(annotated_dir, 'Dx_class_ann.csv'))
 
     # Create dictionary to reference stroke types
     a = pd.Series(df_stroke_classes['diagnosis'])
@@ -417,13 +413,13 @@ if to_run['Dx']:
 
     # Drop unnecessary columns
     df = df.reset_index()
-    df = df.drop(['level_0', 'mrn', 'csn', 'index', 'icd9', 'icd10', 
+    df = df.drop(['level_0', 'mrn', 'csn', 'icd9', 'icd10',
                 'diagnosis', 'primary_dx', 'ed_dx', 'stroke_class'], axis=1)
 
     print('\nDx: \n',df.head())
 
     # Write to processed
-    df.to_sql('DX', processed_conn, if_exists='replace')
+    df.to_sql('DX', processed_conn, if_exists='replace', index=False)
 
 
 
@@ -440,8 +436,7 @@ if to_run['Hx']:
     df['mrn_csn_pair'] = df['mrn_csn_pair'].astype(str)
 
     # Load in csv data categorizing descriptions into categories
-    path = "S:\Dehydration_stroke\Team Emerald\Working Data\Preprocessed\Working\Manual_Coding\Annotated\Hx_ann.csv"
-    hx_categories = pd.read_csv(path)
+    hx_categories = pd.read_csv(os.path.join(annotated_dir, 'Hx_ann.csv'))
 
     # Create dictionary to map descriptions to categories
     a = pd.Series(hx_categories['description'])
@@ -455,7 +450,7 @@ if to_run['Hx']:
     # Convert hx class feature to dummies
     cols = pd.get_dummies(df['hx_class']).columns
     df[cols] = pd.get_dummies(df['hx_class'])
-    df = df.drop(['index','mrn','csn','description','resolved_datetime',
+    df = df.drop(['mrn','csn','description','resolved_datetime',
                 'icd10','hx_class'], axis=1)
 
     # Identify unique pairs
@@ -474,7 +469,7 @@ if to_run['Hx']:
     print('\nHx: \n', d.head())
 
     # Write to processed
-    d.to_sql('HX', processed_conn, if_exists='replace')
+    d.to_sql('HX', processed_conn, if_exists='replace', index=False)
 
 
 
@@ -494,8 +489,7 @@ if to_run['LDA']:
     df = df.drop(df[df['lda_name'].isnull()].index)
 
     # Load in csv data categorizing descriptions into categories
-    path = "S:\Dehydration_stroke\Team Emerald\Working Data\Preprocessed\Working\Manual_Coding\Annotated\LDA_names.csv"
-    lda_names = pd.read_csv(path)
+    lda_names = pd.read_csv(os.path.join(annotated_dir, 'LDA_names.csv'))
 
     # Create dictionary to map descriptions to categories
     a = pd.Series(lda_names['lda_name'])
@@ -508,7 +502,7 @@ if to_run['LDA']:
     # Convert hx class feature to dummies
     cols = pd.get_dummies(df['lda_names']).columns
     df[cols] = pd.get_dummies(df['lda_names'])
-    df = df.drop(['index','mrn','csn','placed_datetime','removed_datetime',
+    df = df.drop(['mrn','csn','placed_datetime','removed_datetime',
                 'template_name','lda_name', 'lda_measurements_and_assessments',
                 'lda_names'], axis=1)
 
@@ -527,16 +521,15 @@ if to_run['LDA']:
     print('\nLDA: \n', d.head())
 
     # Write to processed
-    d.to_sql('LDA', processed_conn, if_exists='replace')
+    d.to_sql('LDA', processed_conn, if_exists='replace', index=False)
 
 ##### IO Flowsheet #####
 if to_run['IO_Flowsheet']:
     # Read file
-    dat = pd.read_sql('SELECT * FROM IO_FLOWSHEET', raw_conn, parse_dates=True, index_col='index')
+    dat = pd.read_sql('SELECT * FROM IO_FLOWSHEET', raw_conn, parse_dates=True)
 
     # Read manual coding
-    mc = pd.read_csv(
-        'S:/Dehydration_stroke/Team Emerald/Working Data/Preprocessed/Working/Manual_Coding/Annotated/IO_Flowsheet_names.csv')
+    mc = pd.read_csv(os.path.join(annotated_dir, 'IO_Flowsheet_names.csv'))
     dat = pd.merge(dat, mc, how='left', on='flowsheet_row_name')
     dat_pivoted = pd.pivot_table(dat, index=['mrn', 'csn', 'recorded_datetime'],
                                  columns='Name', values='value', aggfunc='first')
@@ -573,11 +566,10 @@ if to_run['IO_Flowsheet']:
 ##### Labs #####
 if to_run['Labs']:
     # Read file
-    dat = pd.read_sql('SELECT * FROM LABS', raw_conn, parse_dates=True, index_col='index')
+    dat = pd.read_sql('SELECT * FROM LABS', raw_conn, parse_dates=True)
 
     # Read manual coding
-    mc = pd.read_csv(
-        'S:/Dehydration_stroke/Team Emerald/Working Data/Preprocessed/Working/Manual_Coding/Annotated/Lab_names.csv')
+    mc = pd.read_csv(os.path.join(annotated_dir, 'Lab_names.csv'))
     dat = pd.merge(dat, mc, how='left', on=['order_description', 'component_name', 'component_base_name'])
     dat_pivoted = pd.pivot_table(dat, index=['mrn', 'csn', 'result_datetime', 'units'],
                                  columns='Name', values='value_numeric', aggfunc='first')
@@ -605,11 +597,10 @@ if to_run['Labs']:
 ##### Problem List #####
 if to_run['Problem_List']:
     # Read file
-    dat = pd.read_sql('SELECT * FROM PROBLEM_LIST', raw_conn, parse_dates=True, index_col='index')
+    dat = pd.read_sql('SELECT * FROM PROBLEM_LIST', raw_conn, parse_dates=True)
 
     # Read manual coding
-    mc = pd.read_csv(
-        'S:/Dehydration_stroke/Team Emerald/Working Data/Preprocessed/Working/Manual_Coding/Annotated/Hx_ann.csv')
+    mc = pd.read_csv(os.path.join(annotated_dir, 'Hx_ann.csv'))
     dat = pd.merge(dat, mc, how='left', on=['icd10', 'description'])
     dat = dat[dat['Comorbidity'].notnull()]
     one_hot = pd.get_dummies(dat['Comorbidity'], prefix='problem_list')

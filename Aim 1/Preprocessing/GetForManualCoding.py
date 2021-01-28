@@ -1,19 +1,16 @@
 # Imports
 import json, os
-
-import numpy as np
 import pandas as pd
 pd.set_option('display.max_columns',None)
 import sqlite3
-import dateutil.parser as parser
 
 # Config file
 with open('cfg.json') as json_file:
     cfg = json.load(json_file)
 
 # Setup SQLite DB
-data_dir = cfg['WORKING_DATA_DIR'] + '/CCDA_Data'
-db_url = cfg['WORKING_DATA_DIR'] + '/Preprocessed/Working/Raw.db'
+data_dir = os.path.join(cfg['WORKING_DATA_DIR'], 'CCDA_Data')
+db_url = os.path.join(cfg['WORKING_DATA_DIR'], 'Preprocessed/Working/Raw.db')
 conn = sqlite3.connect(db_url)
 
 cols_to_get = [
@@ -33,7 +30,6 @@ cols_to_get = [
     ('SELECT DISTINCT icd10, description FROM PROBLEM_LIST','Problem_List'),
     ('SELECT DISTINCT order_description, component_name, component_base_name FROM LABS','Lab_names')
 ]
-c=('SELECT DISTINCT order_description, component_name, component_base_name FROM LABS','Lab_names')
-#for c in cols_to_get:
-dat = pd.read_sql(c[0], conn)
-dat.to_csv(cfg['WORKING_DATA_DIR'] + '/Preprocessed/Working/Manual_Coding/Unannotated/'+c[1]+'.csv')
+for c in cols_to_get:
+    dat = pd.read_sql(c[0], conn)
+    dat.to_csv(os.path.join(cfg['WORKING_DATA_DIR'], 'Preprocessed/Working/Manual_Coding/Unannotated/'+c[1]+'.csv'))

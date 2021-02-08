@@ -18,17 +18,21 @@ cols_to_get = [
     ('SELECT DISTINCT flowsheet_row_name FROM NEURO', 'neuro_names'),
     ('SELECT DISTINCT icd9, icd10, diagnosis FROM DX WHERE primary_dx = "Y" OR ed_dx = "Y"','Dx_class'),
     ('SELECT DISTINCT flowsheet_row_name FROM FLOWSHEET','Flowsheet_names'),
-    ('SELECT DISTINCT unit FROM ADT', 'Units'),
+    ('SELECT DISTINCT unit FROM ADT_static', 'Units'),
     ('SELECT DISTINCT admit_service FROM DEMOGRAPHICS','Services'),
     ('SELECT DISTINCT admit_department FROM DEMOGRAPHICS UNION SELECT DISTINCT discharge_department FROM DEMOGRAPHICS', 'Departments'),
     ('SELECT DISTINCT proc_name,display_name FROM FEEDING', 'Feeding'),
     ('SELECT DISTINCT icd10, description FROM HX','Hx'),
     ('SELECT DISTINCT flowsheet_row_name FROM IO_FLOWSHEET','IO_Flowsheet_names'),
-    ('SELECT DISTINCT lda_name from LDA','LDA_names'),
+    ('SELECT DISTINCT lda_name from LDA_static','LDA_names'),
     ('SELECT DISTINCT medication_name FROM MAR UNION SELECT DISTINCT medication_name FROM MED','Med_names'),
     ('SELECT DISTINCT flowsheet_row_name FROM NEURO', 'neuro_names'),
     ('SELECT DISTINCT icd10, description FROM PROBLEM_LIST','Problem_List'),
     ('SELECT DISTINCT order_description, component_name, component_base_name FROM LABS','Lab_names')
+]
+
+cols_to_get = [
+('SELECT DISTINCT order_description, component_name, component_base_name FROM LABS','Lab_names')
 ]
 for c in cols_to_get:
     dat = pd.read_sql(c[0], conn)

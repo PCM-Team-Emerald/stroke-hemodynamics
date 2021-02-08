@@ -1,5 +1,3 @@
-# Based on Varun Naga's code
-
 # Imports
 import pandas as pd
 pd.set_option('display.max_columns',None)
@@ -41,7 +39,8 @@ for m in mrn_csns:
               'glasgow_eye_opening',
               'glasgow_motor_response',
               'glasgow_verbal_response',
-              'cam_icu']:
+              'consciousness',
+              'orientation']:
         dat_sub = dat[(dat['mrn_csn_pair'] == m) & (dat['Name'] == v)]
         if dat_sub.shape[0] > 0:
             idx = dat_sub['time_to_discharge'].idxmin()

@@ -27,20 +27,20 @@ def datetimeColToISO(df, dt_cols):
 
 
 to_run = {
-    'ADT':          True,
-    'Demographics': True,
-    'Dx':           True,
-    'Feeding':      True,
-    'Flowsheet':    True,
-    'IO_Flowsheet': True,
-    'Labs':         True,
-    'LDA':          True,
-    'MAR':          True,
-    'Med':          True,
-    'Hx':           True,
-    'Problem_List': True,
-    'Neuro':        True,
-    'Dispo':        True
+    'ADT':          False,
+    'Demographics': False,
+    'Dx':           False,
+    'Feeding':      False,
+    'Flowsheet':    False,
+    'IO_Flowsheet': False,
+    'Labs':         False,
+    'LDA':          False,
+    'MAR':          False,
+    'Med':          False,
+    'Hx':           False,
+    'Problem_List': False,
+    'Neuro':        False,
+    'Dispo':        False
 }
 
 ##### ADT #####
@@ -147,9 +147,10 @@ if to_run['Labs']:
     dat = pd.read_table(os.path.join(data_dir, 'labs.txt'), sep='|')
 
     # Drop unnecesary cols, rename
-    dat.columns = ['mrn', 'csn', 'RESULT_DATE_TIME', 'result_datetime',
+    dat.columns = ['mrn', 'csn', 'result_datetime',
                    'units', 'value_numeric', 'value_text', 'lab_result_comment', 'order_id', 'order_description',
                    'order_display_name', 'component_name', 'component_base_name']
+
     dat = dat[['mrn', 'csn', 'result_datetime',
                'units', 'value_numeric', 'value_text', 'lab_result_comment', 'order_id', 'order_description',
                'order_display_name', 'component_name', 'component_base_name']]

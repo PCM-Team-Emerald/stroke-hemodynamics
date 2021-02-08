@@ -14,24 +14,25 @@ with open('cfg.json') as json_file:
 raw_dir = os.path.join(cfg['WORKING_DATA_DIR'], 'Preprocessed/Working/Raw.db')
 processed_dir = os.path.join(cfg['WORKING_DATA_DIR'], 'Preprocessed/Working/Processed.db')
 annotated_dir = os.path.join(cfg['WORKING_DATA_DIR'], 'Preprocessed/Working/Manual_Coding/Annotated')
+vars_to_include_dir = os.path.join(cfg['WORKING_DATA_DIR'], 'Preprocessed/Working/Vars_To_Keep')
 raw_conn = sqlite3.connect(raw_dir)
 processed_conn = sqlite3.connect(processed_dir)
 
 to_run = {
-    'ADT':          True,
-    'Demographics': True,
-    'Dx':           True,
-    'Feeding':      True,
-    'Flowsheet':    True,
-    'IO_Flowsheet': True,
-    'Labs':         True,
-    'LDA':          True,
-    'MAR':          True,
-    'Med':          True,
-    'Hx':           True,
-    'Problem_List': True,
-    'Neuro':        True,
-    'Dispo':        True
+    'ADT':          False,
+    'Demographics': False,
+    'Dx':           False,
+    'Feeding':      False,
+    'Flowsheet':    False,
+    'IO_Flowsheet': False,
+    'Labs':         False,
+    'LDA':          False,
+    'MAR':          False,
+    'Med':          False,
+    'Hx':           False,
+    'Problem_List': False,
+    'Neuro':        False,
+    'Dispo':        False
 }
 
 ##### Flowsheet #####
@@ -46,10 +47,10 @@ if to_run['Flowsheet']:
                                  columns='Name',values='value',aggfunc='first')
 
     # Processing
-    to_keep = ['bp','pulse_ox','pulse','temp', 'ampac_mobility_tscore','ampac_activity_tscore','hlm']
+    with open(os.path.join(vars_to_include_dir, 'Flowsheet.txt')) as f:
+        to_keep = f.read().splitlines()
 
     dat_pivoted = dat_pivoted[to_keep]
-    dat_pivoted.dropna(how='all',inplace=True)
 
     # BPs
     bps = dat_pivoted['bp'].str.split('/', n=1, expand=True)
@@ -69,15 +70,14 @@ if to_run['Flowsheet']:
                   'Walk 250+ feet (8)']
     replacing = [1,2,3,4,5,6,7,8]
 
-    dat_pivoted['hlm'] = dat_pivoted['hlm'].replace(to_replace,replacing).str.strip()
-    dat_pivoted['hlm'] = dat_pivoted['hlm'].apply(lambda x: x if x != x else x if len(x)==1 else np.NaN)
+    dat_pivoted['hlm'] = dat_pivoted['hlm'].replace(to_replace,replacing)
+    dat_pivoted['hlm'] = dat_pivoted['hlm'].apply(lambda x: x if x != x else x if type(x) == int else np.NaN)
 
     for c in dat_pivoted.columns:
         dat_pivoted[c] = dat_pivoted[c].astype(float)
 
     # Convert temp F to C
     dat_pivoted['temp'] = dat_pivoted['temp'].apply(lambda x: x if x < 70 else (x-32)*5/9)
-
 
     # Remove extreme values
     dat_pivoted['temp'] = dat_pivoted['temp'].apply(lambda x: np.NaN if x < 35 or x > 42.2 else x)
@@ -93,6 +93,7 @@ if to_run['Flowsheet']:
     dat_melted['mrn_csn_pair'] = dat_melted.apply(lambda x: '({}, {})'.format(x['mrn'],x['csn']), axis=1)
 
     # Write to processed
+    dat_melted.dropna(subset=['value'], inplace=True)
     dat_melted.to_sql('FLOWSHEET', processed_conn, if_exists='replace', index=False)
 
 ##### Neuro #####
@@ -102,27 +103,27 @@ if to_run['Neuro']:
 
     # Read manual coding
     mc = pd.read_csv(os.path.join(annotated_dir, 'neuro_names.csv'))
-
     dat = pd.merge(dat, mc, how='left', on='flowsheet_row_name')
+
     dat = dat[dat['Name'].notnull()]
     dat_pivoted = pd.pivot_table(dat, index=['mrn', 'csn', 'recorded_datetime'],
                                  columns='Name', values='value', aggfunc='first')
     # Processing
-    to_keep = ['glasgow_score',
-               'glasgow_eye_opening',
-               'glasgow_verbal_response',
-               'glasgow_motor_response',
-               'cam_icu']
+    with open(os.path.join(vars_to_include_dir, 'Neuro.txt')) as f:
+        to_keep = f.read().splitlines()
 
     dat_pivoted = dat_pivoted[to_keep]
-    dat_pivoted.dropna(how='all', inplace=True)
 
-    # cam_icu
-    to_replace = ['Negative',
-                  'Positive',
-                  'Unable to Assess']
-    replacing = [0,1, np.NaN]
-    dat_pivoted['cam_icu'] = dat_pivoted['cam_icu'].replace(to_replace, replacing)
+    # Orientation
+    orientation = pd.read_csv(os.path.join(annotated_dir, 'vars/orientation.csv'))
+    dat_pivoted['orientation'] = dat_pivoted['orientation'].replace(orientation['value'].tolist(), orientation['code'].tolist())
+
+    # Consciousness
+    consciousness = pd.read_csv(os.path.join(annotated_dir, 'vars/consciousness.csv'))
+    dat_pivoted['consciousness'] = dat_pivoted['consciousness'].replace(consciousness['value'].tolist(),
+                                                                    consciousness['code'].tolist())
+
+    dat_pivoted.dropna(how='all', inplace=True)
 
     # Melt
     dat_melted = dat_pivoted.reset_index(drop=False).melt(id_vars=['mrn', 'csn', 'recorded_datetime'])
@@ -131,6 +132,7 @@ if to_run['Neuro']:
     dat_melted['mrn_csn_pair'] = dat_melted.apply(lambda x: '({}, {})'.format(x['mrn'], x['csn']), axis=1)
 
     # Write to processed
+    dat_melted.dropna(subset=['value'], inplace=True)
     dat_melted.to_sql('NEURO', processed_conn, if_exists='replace', index=False)
 
 ##### Dispo #####
@@ -147,7 +149,11 @@ if to_run['Dispo']:
     # MRN, CSN Pairs
     dat['mrn_csn_pair'] = dat.apply(lambda x: '({}, {})'.format(x['mrn'], x['csn']), axis=1)
     dat = dat[['mrn_csn_pair', 'Name']]
+    mrn_csns = dat['mrn_csn_pair']
+    dat = pd.get_dummies(dat['Name'], prefix='dispo')
+    dat.index = mrn_csns
     # Write to processed
+    dat.reset_index(drop=False, inplace=True)
     dat.to_sql('DISPO', processed_conn, if_exists='replace', index=False)
 
 ##### Meds #####
@@ -161,83 +167,23 @@ if to_run['MAR']:
     dat = pd.merge(dat, mc, how='left', on='medication_name')
 
     # Processing
-    meds_to_keep = [
-        '5asa_der',
-        'acei',
-        'acei_diuretic',
-        'adenosine',
-        'adh',
-        'adh_analog',
-        'adrenergic_agonist',
-        'albumin',
-        'alpha_agonist',
-        'alpha_beta_agonist',
-        'alpha_blocker',
-        'alpha2_agonist',
-        'anti_anginal',
-        'antiarrhythmic',
-        'anticholinergic',
-        'anticholinergic_beta_agonist',
-        'antiplatelet',
-        'antithyroid',
-        'anxiolytic',
-        'arb',
-        'arb_ccb',
-        'arb_diuretic',
-        'arb_neprilysin_inh',
-        'bb_diuretic',
-        'beta_agonist',
-        'beta_agonist_corticosteroid',
-        'beta_blocker',
-        'beta3_agonist',
-        'ccb',
-        'ccb_acei',
-        'ccb_arb',
-        'ccb_statin',
-        'cholinergic',
-        'corticosteroid',
-        'crystalloid',
-        'colloid',
-        'direct_renin_inh',
-        'diuretic',
-        'doac',
-        'GP_IIb_IIIa_inh',
-        'heparin',
-        'hypertonic_saline',
-        'hypertonic_saline_kcl',
-        'inotrope',
-        'k_channel_blocker',
-        'laxative',
-        'lmwh',
-        'nmba',
-        'nmba_receptor_antagonist',
-        'nsaid',
-        'acetaminophen',
-        'opioid',
-        'opioid_acetaminophen',
-        'osmotic',
-        'p2y12_inh',
-        'pde_inh',
-        'pde5_inh',
-        'peritoneal_dialysis_soln',
-        'sodium_chloride',
-        'somatostatin_analog',
-        'stimulant',
-        'stool_softener',
-        'thrombolytic',
-        'thyroid_hormone',
-        'txa',
-        'vasodilator'
-    ]
+    with open(os.path.join(vars_to_include_dir, 'MAR.txt')) as f:
+        meds_to_keep = f.read().splitlines()
 
     dat = dat[dat['class'].isin(meds_to_keep)]
     dat.dropna(how='all', inplace=True)
 
+    dat_list = dat[['class','medication_name']].drop_duplicates(ignore_index=True).sort_values(by='medication_name').groupby('class').agg(lambda x: '\n'.join(x)).reset_index(drop=False)
+    with open(os.path.join(cfg['WORKING_DATA_DIR'], 'Preprocessed/Working/Meds.txt'), 'w') as f:
+        for i, r in dat_list.iterrows():
+            f.write(r['class']+'\n')
+            f.write(r['medication_name']+'\n')
+            f.write('\n')
+
     # MRN, CSN Pairs
     dat['mrn_csn_pair'] = dat.apply(lambda x: '({}, {})'.format(x['mrn'], x['csn']), axis=1)
-    dat = dat[['mrn_csn_pair', 'class', 'route', 'med_admin_start_datetime', 'med_admin_end_datetime']]
+    dat = dat[['mrn_csn_pair', 'class', 'med_admin_start_datetime', 'med_admin_end_datetime', 'dosage']]
     # Write to processed
-    print(dat.dtypes)
     dat.to_sql('MAR', processed_conn, if_exists='replace', index=False)
 
 
@@ -254,42 +200,12 @@ if to_run['ADT']:
     # Load in manual coding to categorize unit classes
     units_classes = pd.read_csv(os.path.join(annotated_dir, 'Units_ann.csv'))
 
-    # Create dictionary to reference stroke types
-    a = pd.Series(units_classes['unit'])
-    b = pd.Series(units_classes['Unit'])
-    unit_dict = dict(zip(a.values,b.values))
-
-    # Create new feature column categorizing units
-    df['Unit'] = df['unit'].apply(lambda x: unit_dict[x])
-    df['Unit'] = df['Unit'].apply(lambda x: 'Other' if str(x) == 'nan' else x)
-
-    # Convert unique unit names to dummie variables
-    cols = pd.get_dummies(df['Unit'], drop_first=False).columns
-    df[cols] = pd.get_dummies(df['Unit'], drop_first=False)
-
-    # Drop unused columns
-    df = df.drop(['mrn','csn','unit','in','out'], axis=1)
-
-    # Identify unique pairs
-    unique_pairs = df['mrn_csn_pair'].unique()
-
-    # Iterate through unique pairs to gather units for each individual patient
-    d = pd.DataFrame(columns=cols)
-    for patient in unique_pairs:
-        series = df[df['mrn_csn_pair'] == patient][cols].sum()
-        d = d.append(series, ignore_index=True)
-
-    # Insert identifier column to new dataframe
-    d.insert(0, 'mrn_csn_pair', unique_pairs)
-
-    print('\nAdt: \n', d.head())
+    dat = pd.merge(df, units_classes, how='inner', on='unit')
+    dat = dat[['mrn_csn_pair', 'in', 'out', 'Unit']]
+    dat.dropna(how='any', inplace=True)
 
     # Write to processed
-    d.to_sql('ADT', processed_conn, if_exists='replace', index=False)
-
-
-
-
+    dat.to_sql('ADT', processed_conn, if_exists='replace', index=False)
 
 ##### Demographics #####
 # Function to extract CCI score from string
@@ -321,6 +237,13 @@ if to_run['Demographics']:
 
     # Convert the total hospital stay to minutes
     df['time_in_hospital_minutes']=df['time_in_hospital_minutes'].apply(timedelta_to_min)
+    df['los_ge_7'] = df['time_in_hospital_minutes'].apply(lambda x: 1 if x >= 60*24*7 else 0)
+
+    # Admission TOD
+    df['admit_tod'] = df['admission_datetime'].apply(
+        lambda x: x.hour + x.minute/60 + x.second/3600)
+    df['admit_tod'] = (df['admit_tod'] - 7).apply(lambda x: x if x > 0 else x + 24)
+    df['admit_tod'] = df['admit_tod']/24
 
     # Create dummy fariable for gender
     df['male'] = pd.get_dummies(df['gender'], drop_first=True)
@@ -379,10 +302,6 @@ if to_run['Demographics']:
     # Write to processed
     df.to_sql('DEMOGRAPHICS', processed_conn, if_exists='replace', index=False)
 
-
-
-
-
 ##### Dx #####
 if to_run['Dx']:
     # Read file
@@ -396,34 +315,17 @@ if to_run['Dx']:
     # Load in csv data categorizing diagnoses into stroke types
     df_stroke_classes = pd.read_csv(os.path.join(annotated_dir, 'Dx_class_ann.csv'))
 
-    # Create dictionary to reference stroke types
-    a = pd.Series(df_stroke_classes['diagnosis'])
-    b = pd.Series(df_stroke_classes['stroke_type'])
-    stroke_dict = dict(zip(a.values,b.values))
+    dat = pd.merge(df, df_stroke_classes, how='left', on=['icd10', 'diagnosis'])
+    dat = dat[(dat['primary_dx'] == 'Y') | (dat['ed_dx'] == 'Y')]
 
-    # Only include patients with a primary or an ED diagnosis
-    df = df[(df['primary_dx'] == 'Y') | (df['ed_dx'] == 'Y')]
-
-    # Create new stroke class column categorizing diagnosis based on dictionary
-    df['stroke_class'] = df['diagnosis'].apply(lambda x: stroke_dict[x])
-
-    # Convert stroke classes to dummy variables
-    dummies = pd.get_dummies(df['stroke_class'])
-    df[['hemorrhagic', 'ischemic', 'no_stroke', 'probable']] = dummies
-
-    # Drop unnecessary columns
-    df = df.reset_index()
-    df = df.drop(['mrn', 'csn', 'icd9', 'icd10',
-                'diagnosis', 'primary_dx', 'ed_dx', 'stroke_class'], axis=1)
-
-    print('\nDx: \n',df.head())
-
+    dat['hemorrhagic_stroke'] = dat['stroke_type'] == 'H'
+    dat['ischemic_stroke'] = dat['stroke_type'] == 'I'
+    dat = dat[['mrn_csn_pair', 'hemorrhagic_stroke', 'ischemic_stroke']].groupby('mrn_csn_pair').agg('sum')
+    dat['hemorrhagic_stroke'] = dat['hemorrhagic_stroke'].apply(lambda x: 0 if x == 0 else 1)
+    dat['ischemic_stroke'] = dat['ischemic_stroke'].apply(lambda x: 0 if x == 0 else 1)
+    dat.reset_index(drop=False, inplace=True)
     # Write to processed
-    df.to_sql('DX', processed_conn, if_exists='replace', index=False)
-
-
-
-
+    dat.to_sql('DX', processed_conn, if_exists='replace', index=False)
 
 ##### Hx #####
 if to_run['Hx']:
@@ -457,6 +359,7 @@ if to_run['Hx']:
     unique_pairs = df['mrn_csn_pair'].unique()
 
     # Iterate through unique pairs to gather units for each individual patient
+
     d = pd.DataFrame(columns=cols)
     for patient in unique_pairs:
         series = df[df['mrn_csn_pair'] == patient][cols].sum()
@@ -470,10 +373,6 @@ if to_run['Hx']:
 
     # Write to processed
     d.to_sql('HX', processed_conn, if_exists='replace', index=False)
-
-
-
-
 
 ##### LDA #####
 if to_run['LDA']:
@@ -491,37 +390,14 @@ if to_run['LDA']:
     # Load in csv data categorizing descriptions into categories
     lda_names = pd.read_csv(os.path.join(annotated_dir, 'LDA_names.csv'))
 
-    # Create dictionary to map descriptions to categories
-    a = pd.Series(lda_names['lda_name'])
-    b = pd.Series(lda_names['Unnamed: 2'])
-    lda_dict = dict(zip(a.values,b.values))
+    dat = pd.merge(df, lda_names, how='inner', on='lda_name')
+    dat = dat[['mrn_csn_pair', 'placed_datetime', 'removed_datetime', 'Name']]
 
-    # Create new feature with lda class
-    df['lda_names'] = df['lda_name'].apply(lambda x: str(lda_dict[x]))
-
-    # Convert hx class feature to dummies
-    cols = pd.get_dummies(df['lda_names']).columns
-    df[cols] = pd.get_dummies(df['lda_names'])
-    df = df.drop(['mrn','csn','placed_datetime','removed_datetime',
-                'template_name','lda_name', 'lda_measurements_and_assessments',
-                'lda_names'], axis=1)
-
-    # Identify unique pairs
-    unique_pairs = df['mrn_csn_pair'].unique()
-
-    # Iterate through unique pairs to gather units for each individual patient
-    d = pd.DataFrame(columns=cols)
-    for patient in unique_pairs:
-        series = df[df['mrn_csn_pair'] == patient][cols].sum()
-        d = d.append(series, ignore_index=True)
-
-    # Insert identifier column to new dataframe
-    d.insert(0, 'mrn_csn_pair', unique_pairs)
-
-    print('\nLDA: \n', d.head())
+    dat.dropna(how='any', inplace=True)
+    dat.drop_duplicates(inplace=True)
 
     # Write to processed
-    d.to_sql('LDA', processed_conn, if_exists='replace', index=False)
+    dat.to_sql('LDA', processed_conn, if_exists='replace', index=False)
 
 ##### IO Flowsheet #####
 if to_run['IO_Flowsheet']:
@@ -535,29 +411,18 @@ if to_run['IO_Flowsheet']:
                                  columns='Name', values='value', aggfunc='first')
 
     # Processing
-    to_keep = ['iv_volume',
-               'urine_net_output',
-               'urine_output',
-               'oral_intake',
-               'tube_feeding_intake',
-               'feeding_meds',
-               'intake_ml',
-               'tube_flushes',
-               'piggyback_iv_volume',
-               'urine_output',
-               'saline_flush',
-               'intake_ml',
-               'intravenous_intake',
-               'stool_amount',
-               'free_water']
+    with open(os.path.join(vars_to_include_dir, 'IO_Flowsheet.txt')) as f:
+        to_keep = f.read().splitlines()
 
     dat_pivoted = dat_pivoted[to_keep]
+
     dat_pivoted.dropna(how='all', inplace=True)
 
     # Melt
     dat_melted = dat_pivoted.reset_index(drop=False).melt(id_vars=['mrn', 'csn', 'recorded_datetime'])
 
     # MRN, CSN Pairs
+    dat_melted.dropna(subset=['value'], inplace=True)
     dat_melted['mrn_csn_pair'] = dat_melted.apply(lambda x: '({}, {})'.format(x['mrn'], x['csn']), axis=1)
 
     # Write to processed
@@ -570,29 +435,29 @@ if to_run['Labs']:
 
     # Read manual coding
     mc = pd.read_csv(os.path.join(annotated_dir, 'Lab_names.csv'))
+    for c in ['order_description', 'component_name', 'component_base_name']:
+        mc[c] = mc[c].str.upper()
+        dat[c] = dat[c].str.upper()
     dat = pd.merge(dat, mc, how='left', on=['order_description', 'component_name', 'component_base_name'])
-    dat_pivoted = pd.pivot_table(dat, index=['mrn', 'csn', 'result_datetime', 'units'],
+    dat_pivoted = pd.pivot_table(dat, index=['mrn', 'csn', 'result_datetime'],
                                  columns='Name', values='value_numeric', aggfunc='first')
 
     # Processing
-    to_keep = [
-        'Na', 'K', 'CL', 'CO2', 'BUN', 'CREATININE', 'GLU',
-        'HGB', 'HCT', 'WBC', 'PLT',
-        'CALCIUM', 'PHOS', 'PROT', 'ALBUMIN', 'AST', 'ALT', 'LDH', 'ALKPHOS', 'BILITOT', 'ANIONGAP',
-        'LABPT', 'PTT'
-               ]
+    with open(os.path.join(vars_to_include_dir, 'Labs.txt')) as f:
+        to_keep = f.read().splitlines()
 
     dat_pivoted = dat_pivoted[to_keep]
     dat_pivoted.dropna(how='all', inplace=True)
 
     # Melt
-    dat_melted = dat_pivoted.reset_index(drop=False).melt(id_vars=['mrn', 'csn', 'result_datetime', 'units'])
+    dat_melted = dat_pivoted.reset_index(drop=False).melt(id_vars=['mrn', 'csn', 'result_datetime'])
 
     # MRN, CSN Pairs
     dat_melted['mrn_csn_pair'] = dat_melted.apply(lambda x: '({}, {})'.format(x['mrn'], x['csn']), axis=1)
 
     # Write to processed
-    dat_melted.to_sql('IO_FLOWSHEET', processed_conn, if_exists='replace', index=False)
+    dat_melted.dropna(subset=['value'], inplace=True)
+    dat_melted.to_sql('LABS', processed_conn, if_exists='replace', index=False)
 
 ##### Problem List #####
 if to_run['Problem_List']:
@@ -611,6 +476,7 @@ if to_run['Problem_List']:
     
     dat.drop(columns=['mrn','csn','description','noted_datetime','resolved_datetime','icd10','0','Comorbidity'], inplace=True)
     dat = dat.groupby('mrn_csn_pair').agg('max')
+    dat.reset_index(drop=False, inplace=True)
 
     # Write to processed
     dat.to_sql('PROBLEM_LIST', processed_conn, if_exists='replace', index=False)

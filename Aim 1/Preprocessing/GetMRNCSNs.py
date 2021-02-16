@@ -21,7 +21,7 @@ dat = pd.read_sql_query("SELECT mrn_csn_pair, time_in_hospital_minutes FROM DEMO
 # Primary stroke diagnosis
 dx = pd.read_sql_query('SELECT * FROM DX', processed_conn, parse_dates=True)
 dat = pd.merge(dat, dx, how='inner', on='mrn_csn_pair')
-dat = dat[(dat['hemorrhagic'] == 1) | (dat['ischemic'] == 1)]
+dat = dat[(dat['hemorrhagic_stroke'] == 1) | (dat['ischemic_stroke'] == 1)]
 print(dat.shape)
 print(dat['mrn_csn_pair'].unique().shape)
 
@@ -45,3 +45,5 @@ vitals.groupby('mrn_csn_pair').agg('mean')
 
 dat = pd.merge(dat, vitals, how='inner', on='mrn_csn_pair')
 print(dat['mrn_csn_pair'].unique().shape)
+
+dat['mrn_csn_pair'].to_sql('mrn_csn_pairs', processed_conn, if_exists='replace')

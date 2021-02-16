@@ -65,6 +65,7 @@ for c in dat.columns:
                 dat[c].fillna(0, inplace=True)
 
 print(dat.describe())
+
 dat.to_sql('static_predictors', merged_conn, if_exists='replace', index=False)
 
 # Outcomes
@@ -94,6 +95,8 @@ query = 'SELECT mrn_csn_pairs.mrn_csn_pair AS mrn_csn_pair, ' \
         'LEFT JOIN secondary_outcomes on mrn_csn_pairs.mrn_csn_pair = secondary_outcomes.mrn_csn_pair'
 dat = pd.read_sql(query, processed_conn, parse_dates=True)
 dat.drop_duplicates(inplace=True)
+
+dat['los_binned'] = dat['time_in_hospital'].apply(lambda x: 2 if x >= 7*1440 else 1 if x >= 3*1440 else 0)
 dat.to_sql('outcomes', merged_conn, if_exists='replace', index=False)
 
 

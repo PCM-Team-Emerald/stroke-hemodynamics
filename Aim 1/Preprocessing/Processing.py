@@ -352,3 +352,7 @@ if to_run['Flowsheet']:
 ##### IO Flowsheet #####
 if to_run['IO_Flowsheet']:
     pass
+
+
+raw_conn.close()
+processed_conn.close()

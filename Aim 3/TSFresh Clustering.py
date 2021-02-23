@@ -137,6 +137,7 @@ dat_conn['cluster'].value_counts()
 timeseries = getTS(dat_conn)
 getSilhouette(cluster)
 getTSplot(n_clusters, cluster)
+dat_conn.to_csv('kmeans.csv')
 
 ##### Spectral Clustering #####
 
@@ -211,6 +212,7 @@ dat_conn['cluster'].value_counts()
 
 getSilhouette(cluster)
 getTSplot(n_clusters, cluster)
+dat_conn.to_csv('spectral.csv')
 
 ##### Agglomerative Clustering #####
 # Get dendrogram
@@ -232,3 +234,4 @@ dat_conn['cluster'].value_counts()
 
 getSilhouette(cluster)
 getTSplot(n_clusters, cluster)
+dat_conn.to_csv('agglomerative.csv')

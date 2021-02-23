@@ -130,12 +130,13 @@ query = 'SELECT mrn_csn_pairs.mrn_csn_pair AS mrn_csn_pair, ' \
         'UNION ALL ' \
         'SELECT mrn_csn_pairs.mrn_csn_pair AS mrn_csn_pair, ' \
         'DEMOGRAPHICS.admission_datetime AS admit_datetime, ' \
-        'MAR.med_admin_start_datetime AS timestamp, ' \
-        'MAR.class AS measure, ' \
-        '1 AS value ' \
+        'NEURO.recorded_datetime AS timestamp, ' \
+        'NEURO.Name AS measure, ' \
+        'NEURO.value AS value ' \
         'FROM mrn_csn_pairs ' \
-        'INNER JOIN MAR on mrn_csn_pairs.mrn_csn_pair = MAR.mrn_csn_pair ' \
+        'INNER JOIN NEURO on mrn_csn_pairs.mrn_csn_pair = NEURO.mrn_csn_pair ' \
         'INNER JOIN DEMOGRAPHICS on mrn_csn_pairs.mrn_csn_pair = DEMOGRAPHICS.mrn_csn_pair '
+
 
 dat = pd.read_sql(query, processed_conn, parse_dates=['admit_datetime', 'timestamp'])
 dat['timestamp'] = (dat['timestamp'] - dat['admit_datetime'])/pd.Timedelta(minutes=1)
@@ -162,11 +163,24 @@ query = 'SELECT mrn_csn_pairs.mrn_csn_pair AS mrn_csn_pair, ' \
         'FROM mrn_csn_pairs ' \
         'INNER JOIN ADT on mrn_csn_pairs.mrn_csn_pair = ADT.mrn_csn_pair ' \
         'INNER JOIN DEMOGRAPHICS on mrn_csn_pairs.mrn_csn_pair = DEMOGRAPHICS.mrn_csn_pair ' \
+        'UNION ALL ' \
+        'SELECT mrn_csn_pairs.mrn_csn_pair AS mrn_csn_pair, ' \
+        'DEMOGRAPHICS.admission_datetime AS admit_datetime, ' \
+        'MAR.med_admin_start_datetime AS start, ' \
+        "DATETIME(MAR.med_admin_start_datetime, '+1 minutes') AS stop, " \
+        'MAR.class AS measure ' \
+        'FROM mrn_csn_pairs ' \
+        'INNER JOIN MAR on mrn_csn_pairs.mrn_csn_pair = MAR.mrn_csn_pair ' \
+        'INNER JOIN DEMOGRAPHICS on mrn_csn_pairs.mrn_csn_pair = DEMOGRAPHICS.mrn_csn_pair '
 
 dat = pd.read_sql(query, processed_conn, parse_dates=['admit_datetime', 'start', 'stop'])
 
+print(dat[dat['measure']=='diuretic'].head())
+
 dat['start'] = (dat['start'] - dat['admit_datetime'])/pd.Timedelta(minutes=1)
 dat['stop'] = (dat['stop'] - dat['admit_datetime'])/pd.Timedelta(minutes=1)
+
+
 
 dat_ts = []
 for mrn_csn in dat['mrn_csn_pair'].unique():

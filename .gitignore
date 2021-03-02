@@ -1,7 +1,7 @@
-.txt
-.csv
-.xls
-.xlsx
-.json
+*.txt
+*.csv
+*.xls
+*.xlsx
+*.json
 venv/
 .idea/

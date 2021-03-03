@@ -1,44 +1,63 @@
 # Imports
-import json, os
-
-import numpy as np
+import json
 import pandas as pd
-pd.set_option('display.max_columns',None)
+import numpy as np
+
+pd.set_option('display.max_columns', None)
 import sqlite3
+import dateutil.parser as parser
+import os
 
 # Config file
 with open('cfg.json') as json_file:
     cfg = json.load(json_file)
+    
+# Datetime parser function
+def datetimeColToISO(df, dt_cols):
+    for c in dt_cols:
+        try:
+            df[c] = df[c].apply(lambda x: parser.parse(x).isoformat().replace('T', ' '))
+        except TypeError:
+            pass
+    return df
 
-# Setup SQLite DB
-raw_dir = os.path.join(cfg['WORKING_DATA_DIR'], 'Preprocessed/Working/Raw.db')
-processed_dir = os.path.join(cfg['WORKING_DATA_DIR'], 'Preprocessed/Working/Processed.db')
-annotated_dir = os.path.join(cfg['WORKING_DATA_DIR'], 'Preprocessed/Working/Manual_Coding/Annotated')
-vars_to_include_dir = os.path.join(cfg['WORKING_DATA_DIR'], 'Preprocessed/Working/Vars_To_Keep')
-raw_conn = sqlite3.connect(raw_dir)
+# Setup paths and SQLite DB
+data_dir = os.path.join(cfg['WORKING_DATA_DIR'], 'Raw/')
+processed_dir = os.path.join(cfg['WORKING_DATA_DIR'], 'Processed/Processed.db')
+annotated_dir = os.path.join(cfg['WORKING_DATA_DIR'], 'Processed/Manual_Coding')
+vars_to_include_dir = os.path.join(cfg['WORKING_DATA_DIR'], 'Processed/Vars_to_Keep')
 processed_conn = sqlite3.connect(processed_dir)
 
 to_run = {
-    'ADT':          False,
-    'Demographics': False,
-    'Dx':           False,
-    'Feeding':      False,
-    'Flowsheet':    False,
-    'IO_Flowsheet': False,
-    'Labs':         False,
-    'LDA':          False,
-    'MAR':          False,
-    'Med':          False,
-    'Hx':           False,
-    'Problem_List': False,
-    'Neuro':        False,
-    'Dispo':        False
+    'ADT':          True,
+    'Demographics': True,
+    'Dx':           True,
+    'Flowsheet':    True,
+    'IO_Flowsheet': True,
+    'Labs':         True,
+    'LDA':          True,
+    'MAR':          True,
+    'Hx':           True,
+    'Problem_List': True,
+    'Neuro':        True,
+    'Dispo':        True
 }
 
 ##### Flowsheet #####
 if to_run['Flowsheet']:
     # Read file
-    dat = pd.read_sql('SELECT * FROM FLOWSHEET', raw_conn, parse_dates=True)
+    dat = pd.read_table(os.path.join(data_dir, 'flowsheet.txt'), sep='|')
+
+    # Drop unnecesary cols, rename
+    dat.columns = ['mrn', 'csn', 'recorded_RAW', 'recorded_datetime', 'value', 'template_name', 'flowsheet_row_name']
+    dat.drop(columns=['recorded_RAW'])
+
+    # Convert datetimes to ISO
+    datetime_cols = ['recorded_datetime']
+    dat = datetimeColToISO(dat, datetime_cols)
+
+    # Save to db
+    dat.drop_duplicates(inplace=True, ignore_index=True)
 
     # Read manual coding
     mc = pd.read_csv(os.path.join(annotated_dir, 'Flowsheet_names.csv'))
@@ -99,7 +118,21 @@ if to_run['Flowsheet']:
 ##### Neuro #####
 if to_run['Neuro']:
     # Read file
-    dat = pd.read_sql('SELECT * FROM NEURO', raw_conn, parse_dates=True)
+    dat = pd.read_table(os.path.join(data_dir, 'neuro.txt'), sep='|')
+
+    # Drop unnecesary cols, rename
+    # Col names are wrong, overriding here:
+    dat.columns = ['mrn', 'csn', 'recorded_datetime_RAW',
+                   'recorded_datetime', 'value',
+                   'template_name', 'flowsheet_row_name']
+    dat.drop(columns=['recorded_datetime_RAW'], inplace=True)
+
+    # Convert datetimes to ISO
+    datetime_cols = ['recorded_datetime']
+    dat = datetimeColToISO(dat, datetime_cols)
+
+    # Save to db
+    dat.drop_duplicates(inplace=True, ignore_index=True)
 
     # Read manual coding
     mc = pd.read_csv(os.path.join(annotated_dir, 'neuro_names.csv'))
@@ -138,7 +171,13 @@ if to_run['Neuro']:
 ##### Dispo #####
 if to_run['Dispo']:
     # Read file
-    dat = pd.read_sql('SELECT * FROM DISPO', raw_conn, parse_dates=True)
+    dat = pd.read_table(os.path.join(data_dir, 'dispo.txt'), sep='|')
+
+    # Drop unnecesary cols, rename
+    dat.columns = ['mrn', 'csn', 'deceased', 'disposition']
+
+    # Save to db
+    dat.drop_duplicates(inplace=True, ignore_index=True)
 
     # Read manual coding
     mc = pd.read_csv(os.path.join(annotated_dir, 'Dispo_names.csv'))
@@ -159,7 +198,18 @@ if to_run['Dispo']:
 ##### Meds #####
 if to_run['MAR']:
     # Read file
-    dat = pd.read_sql('SELECT * FROM MAR', raw_conn, parse_dates=True)
+    dat = pd.read_table(os.path.join(data_dir, 'mar.txt'))
+
+    # Drop unnecesary cols, rename
+    dat.columns = ['mrn', 'csn', 'medication_name', 'ordered_datetime', 'order_id', 'med_admin_start_datetime',
+                   'med_admin_end_datetime', 'dosage']
+
+    # Convert datetimes to ISO
+    datetime_cols = ['ordered_datetime', 'med_admin_start_datetime', 'med_admin_end_datetime']
+    dat = datetimeColToISO(dat, datetime_cols)
+
+    # Save to db
+    dat.drop_duplicates(inplace=True, ignore_index=True)
 
     # Read manual coding
     mc = pd.read_csv(os.path.join(annotated_dir, 'med_names.csv'))
@@ -174,7 +224,7 @@ if to_run['MAR']:
     dat.dropna(how='all', inplace=True)
 
     dat_list = dat[['class','medication_name']].drop_duplicates(ignore_index=True).sort_values(by='medication_name').groupby('class').agg(lambda x: '\n'.join(x)).reset_index(drop=False)
-    with open(os.path.join(cfg['WORKING_DATA_DIR'], 'Preprocessed/Working/Meds.txt'), 'w') as f:
+    with open(os.path.join(annotated_dir, 'Meds.txt'), 'w') as f:
         for i, r in dat_list.iterrows():
             f.write(r['class']+'\n')
             f.write(r['medication_name']+'\n')
@@ -190,17 +240,27 @@ if to_run['MAR']:
 ##### ADT #####
 if to_run['ADT']:
     # Read file
-    df = pd.read_sql_query("SELECT * FROM ADT", raw_conn, parse_dates=True)
+    dat = pd.read_table(os.path.join(data_dir, 'adt.txt'))
+
+    # Drop unnecesary cols, rename
+    dat.columns = ['mrn', 'csn', 'unit', 'in', 'out']
+
+    # Convert datetimes to ISO
+    datetime_cols = ['in', 'out']
+    dat = datetimeColToISO(dat, datetime_cols)
+
+    # Save to db
+    dat.drop_duplicates(inplace=True, ignore_index=True)
 
     # Create new lable for mrn, csn pair
-    df['mrn_csn_pair'] = list(zip(df.mrn,df.csn))
-    df = df.sort_values('mrn_csn_pair')
-    df['mrn_csn_pair'] = df['mrn_csn_pair'].astype(str)
+    dat['mrn_csn_pair'] = list(zip(dat.mrn,dat.csn))
+    dat = dat.sort_values('mrn_csn_pair')
+    dat['mrn_csn_pair'] = dat['mrn_csn_pair'].astype(str)
 
     # Load in manual coding to categorize unit classes
     units_classes = pd.read_csv(os.path.join(annotated_dir, 'Units_ann.csv'))
 
-    dat = pd.merge(df, units_classes, how='inner', on='unit')
+    dat = pd.merge(dat, units_classes, how='inner', on='unit')
     dat = dat[['mrn_csn_pair', 'in', 'out', 'Unit']]
     dat.dropna(how='any', inplace=True)
 
@@ -212,6 +272,9 @@ if to_run['ADT']:
 def cci(s):
     if str(s) == 'None':
         return None
+    if type(s) == float:
+        return None
+    
     val = s.split(':')
     return int(val[-1])
 
@@ -224,7 +287,19 @@ def timedelta_to_min(time):
 
 if to_run['Demographics']:
     # Read file
-    df = pd.read_sql_query("SELECT * FROM DEMOGRAPHICS", raw_conn, parse_dates=True)
+    dat = pd.read_table(os.path.join(data_dir, 'demographics.txt'), sep='|', encoding='ISO-8859-1')
+
+    # Drop unnecesary cols, rename
+    dat.columns = ['mrn', 'csn', 'admission_datetime', 'discharge_datetime', 'age', 'gender', 'race',
+                   'ed_arrival_datetime', 'admit_service', 'admit_department', 'discharge_department',
+                   'charlson_comorbidity_index']
+
+    # Convert datetimes to ISO
+    datetime_cols = ['admission_datetime', 'discharge_datetime', 'ed_arrival_datetime']
+    df = datetimeColToISO(dat, datetime_cols)
+
+    # Save to db
+    df.drop_duplicates(inplace=True, ignore_index=True)
 
     # Create single label combining mrn and csn
     df['mrn_csn_pair'] = list(zip(df.mrn,df.csn))
@@ -305,7 +380,13 @@ if to_run['Demographics']:
 ##### Dx #####
 if to_run['Dx']:
     # Read file
-    df = pd.read_sql_query("SELECT * FROM DX", raw_conn, parse_dates=True) 
+    df = pd.read_table(os.path.join(data_dir, 'dx.txt'), sep='|', encoding='ISO-8859-1')
+
+    # Drop unnecesary cols, rename
+    df.columns = ['mrn', 'csn', 'icd9', 'icd10', 'diagnosis', 'primary_dx', 'ed_dx']
+
+    # Save to db
+    df.drop_duplicates(inplace=True, ignore_index=True) 
 
     # Create new lable for mrn, csn pair
     df['mrn_csn_pair'] = list(zip(df.mrn,df.csn))
@@ -313,7 +394,7 @@ if to_run['Dx']:
     df['mrn_csn_pair'] = df['mrn_csn_pair'].astype(str)
 
     # Load in csv data categorizing diagnoses into stroke types
-    df_stroke_classes = pd.read_csv(os.path.join(annotated_dir, 'Dx_class_ann.csv'))
+    df_stroke_classes = pd.read_csv(os.path.join(annotated_dir, 'Dx_class_ann_updated.csv'))
 
     dat = pd.merge(df, df_stroke_classes, how='left', on=['icd10', 'diagnosis'])
     dat = dat[(dat['primary_dx'] == 'Y') | (dat['ed_dx'] == 'Y')]
@@ -330,7 +411,17 @@ if to_run['Dx']:
 ##### Hx #####
 if to_run['Hx']:
     # Read file
-    df = pd.read_sql_query("SELECT * FROM HX", raw_conn, parse_dates=True)
+    df = pd.read_table(os.path.join(data_dir, 'hx.txt'))
+
+    # Drop unnecesary cols, rename
+    df.columns = ['mrn', 'csn', 'description', 'resolved_datetime', 'icd10']
+
+    # Convert datetimes to ISO
+    datetime_cols = ['resolved_datetime']
+    df = datetimeColToISO(df, datetime_cols)
+
+    # Save to db
+    dat.drop_duplicates(inplace=True, ignore_index=True)
 
     # Create new lable for mrn, csn pair
     df['mrn_csn_pair'] = list(zip(df.mrn,df.csn))
@@ -377,7 +468,18 @@ if to_run['Hx']:
 ##### LDA #####
 if to_run['LDA']:
     # Read file
-    df = pd.read_sql_query("SELECT * FROM LDA", raw_conn, parse_dates=True)
+    df = pd.read_table(os.path.join(data_dir, 'lda.txt'), encoding='ISO-8859-1')
+
+    # Drop unnecesary cols, rename
+    df.columns = ['mrn', 'csn', 'placed_datetime', 'removed_datetime', 'template_name', 'lda_name',
+                   'lda_measurements_and_assessments']
+
+    # Convert datetimes to ISO
+    datetime_cols = ['placed_datetime', 'removed_datetime']
+    df = datetimeColToISO(df, datetime_cols)
+
+    # Save to db
+    df.drop_duplicates(inplace=True, ignore_index=True)
 
     # Create new lable for mrn, csn pair
     df['mrn_csn_pair'] = list(zip(df.mrn,df.csn))
@@ -402,7 +504,17 @@ if to_run['LDA']:
 ##### IO Flowsheet #####
 if to_run['IO_Flowsheet']:
     # Read file
-    dat = pd.read_sql('SELECT * FROM IO_FLOWSHEET', raw_conn, parse_dates=True)
+    dat = pd.read_table(os.path.join(data_dir, 'io_flowsheet.txt'), sep='|')
+
+    # Drop unnecesary cols, rename
+    dat.columns = ['mrn', 'csn', 'recorded_datetime', 'value', 'template_name', 'flowsheet_row_name']
+
+    # Convert datetimes to ISO
+    datetime_cols = ['recorded_datetime']
+    dat = datetimeColToISO(dat, datetime_cols)
+
+    # Save to db
+    dat.drop_duplicates(inplace=True, ignore_index=True)
 
     # Read manual coding
     mc = pd.read_csv(os.path.join(annotated_dir, 'IO_Flowsheet_names.csv'))
@@ -431,7 +543,23 @@ if to_run['IO_Flowsheet']:
 ##### Labs #####
 if to_run['Labs']:
     # Read file
-    dat = pd.read_sql('SELECT * FROM LABS', raw_conn, parse_dates=True)
+    dat = pd.read_table(os.path.join(data_dir, 'labs.txt'), sep='|')
+
+    # Drop unnecesary cols, rename
+    dat.columns = ['mrn', 'csn', 'result_datetime',
+                   'units', 'value_numeric', 'value_text', 'lab_result_comment', 'order_id', 'order_description',
+                   'order_display_name', 'component_name', 'component_base_name']
+
+    dat = dat[['mrn', 'csn', 'result_datetime',
+               'units', 'value_numeric', 'value_text', 'lab_result_comment', 'order_id', 'order_description',
+               'order_display_name', 'component_name', 'component_base_name']]
+
+    # Convert datetimes to ISO
+    datetime_cols = ['result_datetime']
+    dat = datetimeColToISO(dat, datetime_cols)
+
+    # Save to db
+    dat.drop_duplicates(inplace=True, ignore_index=True)
 
     # Read manual coding
     mc = pd.read_csv(os.path.join(annotated_dir, 'Lab_names.csv'))
@@ -462,7 +590,17 @@ if to_run['Labs']:
 ##### Problem List #####
 if to_run['Problem_List']:
     # Read file
-    dat = pd.read_sql('SELECT * FROM PROBLEM_LIST', raw_conn, parse_dates=True)
+    dat = pd.read_table(os.path.join(data_dir, 'problem_list.txt'), encoding='ISO-8859-1')
+
+    # Drop unnecesary cols, rename
+    dat.columns = ['mrn', 'csn', 'description', 'noted_datetime', 'resolved_datetime', 'icd10']
+
+    # Convert datetimes to ISO
+    datetime_cols = ['noted_datetime', 'resolved_datetime']
+    dat = datetimeColToISO(dat, datetime_cols)
+
+    # Save to db
+    dat.drop_duplicates(inplace=True, ignore_index=True)
 
     # Read manual coding
     mc = pd.read_csv(os.path.join(annotated_dir, 'Hx_ann.csv'))

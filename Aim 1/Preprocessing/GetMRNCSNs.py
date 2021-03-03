@@ -13,7 +13,7 @@ with open('cfg.json') as json_file:
     cfg = json.load(json_file)
 
 # Setup SQLite DB
-processed_url = cfg['WORKING_DATA_DIR'] + '/Preprocessed/Working/Processed.db'
+processed_url = os.path.join(cfg['WORKING_DATA_DIR'], 'Processed/Processed.db')
 processed_conn = sqlite3.connect(processed_url)
 
 dat = pd.read_sql_query("SELECT mrn_csn_pair, time_in_hospital_minutes FROM DEMOGRAPHICS", processed_conn, parse_dates=True)
@@ -46,4 +46,4 @@ vitals.groupby('mrn_csn_pair').agg('mean')
 dat = pd.merge(dat, vitals, how='inner', on='mrn_csn_pair')
 print(dat['mrn_csn_pair'].unique().shape)
 
-dat['mrn_csn_pair'].to_sql('mrn_csn_pairs', processed_conn, if_exists='replace')
+dat['mrn_csn_pair'].to_sql('mrn_csn_pairs', processed_conn, if_exists='replace', index=False)

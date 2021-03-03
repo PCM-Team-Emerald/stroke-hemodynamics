@@ -11,10 +11,10 @@ with open('cfg.json') as json_file:
     cfg = json.load(json_file)
 
 # Setup SQLite DB
-processed_dir = os.path.join(cfg['WORKING_DATA_DIR'], 'Preprocessed/Working/Processed.db')
+processed_dir = os.path.join(cfg['WORKING_DATA_DIR'], 'Processed/Processed.db')
 processed_conn = sqlite3.connect(processed_dir)
 
-merged_dir = os.path.join(cfg['WORKING_DATA_DIR'], 'Preprocessed/Working/Merged.db')
+merged_dir = os.path.join(cfg['WORKING_DATA_DIR'], 'Processed/Merged.db')
 merged_conn = sqlite3.connect(merged_dir)
 
 
@@ -50,10 +50,8 @@ query = 'SELECT mrn_csn_pairs.mrn_csn_pair AS mrn_csn_pair, ' \
         'PROBLEM_LIST."problem_list_Kidney disease" AS pl_kidney_disease ' \
         'FROM mrn_csn_pairs ' \
         'LEFT JOIN DEMOGRAPHICS ON mrn_csn_pairs.mrn_csn_pair = DEMOGRAPHICS.mrn_csn_pair ' \
-        'LEFT JOIN ADT_static ON mrn_csn_pairs.mrn_csn_pair = ADT_static.mrn_csn_pair ' \
         'LEFT JOIN DX on mrn_csn_pairs.mrn_csn_pair = DX.mrn_csn_pair ' \
         'LEFT JOIN HX on mrn_csn_pairs.mrn_csn_pair = HX.mrn_csn_pair ' \
-        'LEFT JOIN LDA_static on mrn_csn_pairs.mrn_csn_pair = LDA_static.mrn_csn_pair ' \
         'LEFT JOIN PROBLEM_LIST on mrn_csn_pairs.mrn_csn_pair = PROBLEM_LIST.mrn_csn_pair'
 dat = pd.read_sql(query, processed_conn, parse_dates=True)
 
@@ -63,8 +61,6 @@ dat.drop_duplicates(inplace=True)
 for c in dat.columns:
         if ('hx_' in c) or ('pl_' in c):
                 dat[c].fillna(0, inplace=True)
-
-print(dat.describe())
 
 dat.to_sql('static_predictors', merged_conn, if_exists='replace', index=False)
 
@@ -127,16 +123,6 @@ query = 'SELECT mrn_csn_pairs.mrn_csn_pair AS mrn_csn_pair, ' \
         'FROM mrn_csn_pairs ' \
         'INNER JOIN LABS on mrn_csn_pairs.mrn_csn_pair = LABS.mrn_csn_pair ' \
         'INNER JOIN DEMOGRAPHICS on mrn_csn_pairs.mrn_csn_pair = DEMOGRAPHICS.mrn_csn_pair ' \
-        'UNION ALL ' \
-        'SELECT mrn_csn_pairs.mrn_csn_pair AS mrn_csn_pair, ' \
-        'DEMOGRAPHICS.admission_datetime AS admit_datetime, ' \
-        'NEURO.recorded_datetime AS timestamp, ' \
-        'NEURO.Name AS measure, ' \
-        'NEURO.value AS value ' \
-        'FROM mrn_csn_pairs ' \
-        'INNER JOIN NEURO on mrn_csn_pairs.mrn_csn_pair = NEURO.mrn_csn_pair ' \
-        'INNER JOIN DEMOGRAPHICS on mrn_csn_pairs.mrn_csn_pair = DEMOGRAPHICS.mrn_csn_pair '
-
 
 dat = pd.read_sql(query, processed_conn, parse_dates=['admit_datetime', 'timestamp'])
 dat['timestamp'] = (dat['timestamp'] - dat['admit_datetime'])/pd.Timedelta(minutes=1)
@@ -167,7 +153,7 @@ query = 'SELECT mrn_csn_pairs.mrn_csn_pair AS mrn_csn_pair, ' \
         'SELECT mrn_csn_pairs.mrn_csn_pair AS mrn_csn_pair, ' \
         'DEMOGRAPHICS.admission_datetime AS admit_datetime, ' \
         'MAR.med_admin_start_datetime AS start, ' \
-        "DATETIME(MAR.med_admin_start_datetime, '+1 minutes') AS stop, " \
+        'DATETIME(MAR.med_admin_start_datetime, "+1 minutes") AS stop, ' \
         'MAR.class AS measure ' \
         'FROM mrn_csn_pairs ' \
         'INNER JOIN MAR on mrn_csn_pairs.mrn_csn_pair = MAR.mrn_csn_pair ' \
@@ -175,12 +161,8 @@ query = 'SELECT mrn_csn_pairs.mrn_csn_pair AS mrn_csn_pair, ' \
 
 dat = pd.read_sql(query, processed_conn, parse_dates=['admit_datetime', 'start', 'stop'])
 
-print(dat[dat['measure']=='diuretic'].head())
-
 dat['start'] = (dat['start'] - dat['admit_datetime'])/pd.Timedelta(minutes=1)
 dat['stop'] = (dat['stop'] - dat['admit_datetime'])/pd.Timedelta(minutes=1)
-
-
 
 dat_ts = []
 for mrn_csn in dat['mrn_csn_pair'].unique():

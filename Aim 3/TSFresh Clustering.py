@@ -20,7 +20,7 @@ with open('cfg.json') as json_file:
     cfg = json.load(json_file)
 
 # Get ts freshed data
-ts_freshed_dir = os.path.join(cfg['WORKING_DATA_DIR'], 'Preprocessed/Working/Complete_updated.csv')
+ts_freshed_dir = os.path.join(cfg['WORKING_DATA_DIR'], 'Processed/complete_24h.csv')
 dat = pd.read_csv(ts_freshed_dir)
 
 # Train-test split
@@ -41,7 +41,7 @@ dat_n = dat[cols_to_keep]
 
 # Get time series
 def getTS(dat_conn):
-    merged_dir = os.path.join(cfg['WORKING_DATA_DIR'], 'Preprocessed/Working/Merged.db')
+    merged_dir = os.path.join(cfg['WORKING_DATA_DIR'], 'Processed/Merged.db')
     merged_conn = sqlite3.connect(merged_dir)
     dat_ts = pd.read_sql('SELECT * FROM timeseries_instantaneous WHERE timestamp >= 0 AND timestamp <= 1440',
                          merged_conn)
@@ -137,7 +137,6 @@ dat_conn['cluster'].value_counts()
 timeseries = getTS(dat_conn)
 getSilhouette(cluster)
 getTSplot(n_clusters, cluster)
-dat_conn.to_csv('kmeans.csv')
 
 ##### Spectral Clustering #####
 
@@ -212,7 +211,6 @@ dat_conn['cluster'].value_counts()
 
 getSilhouette(cluster)
 getTSplot(n_clusters, cluster)
-dat_conn.to_csv('spectral.csv')
 
 ##### Agglomerative Clustering #####
 # Get dendrogram
@@ -234,4 +232,3 @@ dat_conn['cluster'].value_counts()
 
 getSilhouette(cluster)
 getTSplot(n_clusters, cluster)
-dat_conn.to_csv('agglomerative.csv')

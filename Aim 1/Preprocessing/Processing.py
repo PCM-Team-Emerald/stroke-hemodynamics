@@ -29,19 +29,22 @@ vars_to_include_dir = os.path.join(cfg['WORKING_DATA_DIR'], 'Processed/Vars_to_K
 processed_conn = sqlite3.connect(processed_dir)
 
 to_run = {
-    'ADT':          True,
-    'Demographics': True,
-    'Dx':           True,
-    'Flowsheet':    True,
-    'IO_Flowsheet': True,
-    'Labs':         True,
-    'LDA':          True,
-    'MAR':          True,
-    'Hx':           True,
-    'Problem_List': True,
-    'Neuro':        True,
-    'Dispo':        True
+    'ADT':          False,
+    'Demographics': False,
+    'Dx':           False,
+    'Flowsheet':    False,
+    'IO_Flowsheet': False,
+    'Labs':         False,
+    'LDA':          False,
+    'MAR':          False,
+    'Hx':           False,
+    'Problem_List': False,
+    'Neuro':        False,
+    'Dispo':        False,
+    'Short_Blessed': True
 }
+
+
 
 ##### Flowsheet #####
 if to_run['Flowsheet']:
@@ -618,3 +621,23 @@ if to_run['Problem_List']:
 
     # Write to processed
     dat.to_sql('PROBLEM_LIST', processed_conn, if_exists='replace', index=False)
+    
+    ##### Short Blessed #####
+if to_run['Short_Blessed']:
+    # Read file
+    dat = pd.read_table(os.path.join(data_dir, 'short_blessed.txt'), sep='\t')
+
+    # Drop unnecesary cols, rename
+    dat.columns = ['mrn', 'csn', 'timestamp', 'short_blessed', 'template', 'flowsheet_row_name']
+
+    # Save to db
+    dat.drop_duplicates(inplace=True, ignore_index=True)
+
+
+    # MRN, CSN Pairs
+    dat['mrn_csn_pair'] = dat.apply(lambda x: '({}, {})'.format(x['mrn'], x['csn']), axis=1)
+    
+    dat = dat[['mrn_csn_pair', 'short_blessed']]
+    # Write to processed
+    dat.reset_index(drop=False, inplace=True)
+    dat.to_sql('SHORT_BLESSED', processed_conn, if_exists='replace', index=False)

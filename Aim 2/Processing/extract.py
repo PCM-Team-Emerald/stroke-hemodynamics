@@ -2,9 +2,12 @@ if __name__ == '__main__':
     import pandas as pd
     import sqlite3
     import tsfresh
+    import os, json
 
     # Get path and connection
-    path_in = "S:\Dehydration_stroke\Team Emerald\Working Data\Preprocessed\Working\Merged.db"
+    with open('cfg.json') as json_file:
+        cfg = json.load(json_file)
+    path_in = os.path.join('/home/idies/workspace/Storage/zmurphy3/PCM Team Emerald/Data/Processed/Merged.db')
     con = sqlite3.connect(path_in)
 
     insheet = pd.read_sql_query("SELECT * FROM timeseries_instantaneous", con)
@@ -74,10 +77,10 @@ if __name__ == '__main__':
     extracted = extract(1440)
     # Can output just the extracted here before feature slection if want to run mulitple models using same window
     # of data but different hospital discharge dates
-    # extracted.to_csv("S:\Dehydration_stroke\Team Emerald\Working Data\Preprocessed\Working\extracted_24h.csv")
+    #extracted.to_csv(os.path.join(cfg['WORKING_DATA_DIR'], 'Processed/complete_24h.csv'))
     df = select(extracted, 10080)
     print(df.shape)
     # Can output the agglomerated and feature selected databse here
-    # df.to_csv("S:\Dehydration_stroke\Team Emerald\Working Data\Preprocessed\Working\complete_24h.csv")
+    df.to_csv(os.path.join(cfg['WORKING_DATA_DIR'], 'Processed/complete_24h.csv'))
 
 

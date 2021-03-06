@@ -64,6 +64,14 @@ for c in dat.columns:
 
 dat.to_sql('static_predictors', merged_conn, if_exists='replace', index=False)
 
+# Short blessed
+query = 'SELECT * FROM SHORT_BLESSED'
+dat = pd.read_sql(query, processed_conn, parse_dates=True)
+
+dat.to_sql('short_blessed', merged_conn, if_exists='replace', index=False)
+
+
+
 # Outcomes
 query = 'SELECT mrn_csn_pairs.mrn_csn_pair AS mrn_csn_pair, ' \
         'DISPO.dispo_alf, ' \

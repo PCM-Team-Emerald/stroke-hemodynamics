@@ -4,7 +4,7 @@ if __name__ == '__main__':
     import tsfresh
 
     # Get path and connection
-    path_in = "S:\Dehydration_stroke\Team Emerald\Working Data\Preprocessed\Working\Merged.db"
+    path_in = "/home/idies/workspace/Storage/zmurphy3/PCM Team Emerald/Data/Processed/Merged.db"
     con = sqlite3.connect(path_in)
 
     insheet = pd.read_sql_query("SELECT * FROM timeseries_instantaneous", con)
@@ -23,21 +23,7 @@ if __name__ == '__main__':
         first = insheet[(insheet['timestamp'] < window) & (insheet['timestamp'] >= 0)]
         first = first.sort_values('mrn_csn_pair').reset_index(drop=True)
 
-        # Have to break dataset up to avoid memory issues, takes ~20 min to run
-        extracted_flowsheet = pd.DataFrame()
-        for i in range(8):
-            split1 = int(pats.shape[0] / 8) * i
-            split2 = int(pats.shape[0] / 8) * (i + 1)
-            key1 = pats[split1]
-            key2 = pats[split2]
-            index1 = first[first['mrn_csn_pair'] == key1].index[0]
-            index2 = first[first['mrn_csn_pair'] == key2].index[0] - 1
-            if i == 7:
-                index2 = first.shape[0] - 1
-            temp = first.loc[index1 : index2, :]
-            extracted_temp = tsfresh.extract_features(temp, column_id='mrn_csn_pair', column_sort='timestamp', column_kind='measure', column_value='value', n_jobs=6)
-            extracted_flowsheet = extracted_flowsheet.append(extracted_temp, ignore_index=True)
-
+        extracted_flowsheet = tsfresh.extract_features(first, column_id='mrn_csn_pair', column_sort='timestamp', column_kind='measure', column_value='value', n_jobs=8)
         # Drop features that are only NaN
         extracted_flowsheet = extracted_flowsheet.dropna(axis=1, how='all')
 
@@ -45,12 +31,15 @@ if __name__ == '__main__':
         # Add back the mrn_csn_pair
         extracted_flowsheet.insert(0, 'mrn_csn_pair', pats)
 
-        return extracted_flowsheet
+        return extracted_flowsheet.reset_index(drop=True)
 
     # Function to consolidate extracted timeseries data with static features and perform feature selection
     # Window is the cutoff for a binary True for length of stay in minutes - eg 10080 is 7 days
-    def select(flowsheet, window):
+    # Cutoff is the window that was used in extract() so that we don't include patients that were in the hopsital for less than that time.
+    def select(flowsheet, window, cutoff):
         # Need to change this if we are doing sliding model / changing the outcome variable (eg los > 8)
+        # Create outcome in days for logistic regression
+        # los = outcomes.sort_values('mrn_csn_pair')['time_in_hospital'].reset_index(drop=True) / 1440
         los = (outcomes.sort_values('mrn_csn_pair')['time_in_hospital'] > window).astype(int).reset_index(drop=True)
 
         # Drop all columns that are only 0
@@ -58,26 +47,28 @@ if __name__ == '__main__':
 
         # Do tsfresh feature filtering to dramatically reduce feature space
         feature_table = tsfresh.feature_selection.relevance.calculate_relevance_table(flowsheet.drop('mrn_csn_pair', axis=1), los,
-                                                                                      n_jobs=6)
+                                                                                      n_jobs=8)
         # Concat data into one place, dropping irrelevant features
         complete = pd.concat([flowsheet.drop('mrn_csn_pair', axis=1).loc[:, feature_table['relevant']],
                               static.sort_values('mrn_csn_pair').reset_index(drop=True)], axis=1)
 
         # Insert LOS and  mrn_csn_pair to the data file
         complete.insert(0, 'LOS', los)
+        complete.insert(1, 'time_in_hospital', outcomes.sort_values('mrn_csn_pair')['time_in_hospital'].reset_index(drop=True))
+        complete = complete[complete['time_in_hospital'] > cutoff]
+        complete = complete.drop('time_in_hospital', axis=1)
         pairs = complete['mrn_csn_pair']
         complete = complete.drop('mrn_csn_pair', axis=1)
         complete.insert(1, 'mrn_csn_pair', pairs)
 
         return complete
 
-    extracted = extract(1440)
+    extracted = extract(4320)
     # Can output just the extracted here before feature slection if want to run mulitple models using same window
     # of data but different hospital discharge dates
-    # extracted.to_csv("S:\Dehydration_stroke\Team Emerald\Working Data\Preprocessed\Working\extracted_24h.csv")
-    df = select(extracted, 10080)
-    print(df.shape)
+    # extracted.to_csv("/home/idies/workspace/Storage/zmurphy3/PCM Team Emerald/Data/Processed/extracted_24h.csv")
+    df = select(extracted, 10080, 4320)
     # Can output the agglomerated and feature selected databse here
-    # df.to_csv("S:\Dehydration_stroke\Team Emerald\Working Data\Preprocessed\Working\complete_24h.csv")
+    df.to_csv("/home/idies/workspace/Storage/zmurphy3/PCM Team Emerald/Data/Processed/complete_72h.csv")
 
 

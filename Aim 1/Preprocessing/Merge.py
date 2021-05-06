@@ -14,7 +14,7 @@ with open('cfg.json') as json_file:
 processed_dir = os.path.join(cfg['WORKING_DATA_DIR'], 'Processed/Processed.db')
 processed_conn = sqlite3.connect(processed_dir)
 
-merged_dir = os.path.join(cfg['WORKING_DATA_DIR'], 'Processed/Merged.db')
+merged_dir = os.path.join(cfg['WORKING_DATA_DIR'], 'Processed/Merged_neuroadmits.db')
 merged_conn = sqlite3.connect(merged_dir)
 
 
@@ -53,6 +53,7 @@ query = 'SELECT mrn_csn_pairs.mrn_csn_pair AS mrn_csn_pair, ' \
         'LEFT JOIN DX on mrn_csn_pairs.mrn_csn_pair = DX.mrn_csn_pair ' \
         'LEFT JOIN HX on mrn_csn_pairs.mrn_csn_pair = HX.mrn_csn_pair ' \
         'LEFT JOIN PROBLEM_LIST on mrn_csn_pairs.mrn_csn_pair = PROBLEM_LIST.mrn_csn_pair'
+
 dat = pd.read_sql(query, processed_conn, parse_dates=True)
 
 
@@ -67,7 +68,7 @@ dat.to_sql('static_predictors', merged_conn, if_exists='replace', index=False)
 # Short blessed
 query = 'SELECT * FROM SHORT_BLESSED'
 dat = pd.read_sql(query, processed_conn, parse_dates=True)
-
+dat = dat[['mrn_csn_pair', 'short_blessed']]
 dat.to_sql('short_blessed', merged_conn, if_exists='replace', index=False)
 
 
@@ -116,6 +117,15 @@ query = 'SELECT mrn_csn_pairs.mrn_csn_pair AS mrn_csn_pair, ' \
         'UNION ALL ' \
         'SELECT mrn_csn_pairs.mrn_csn_pair AS mrn_csn_pair, ' \
         'DEMOGRAPHICS.admission_datetime AS admit_datetime, ' \
+        'RESPIRATIONS.recorded_datetime AS timestamp, ' \
+        'RESPIRATIONS.Name AS measure, ' \
+        'RESPIRATIONS.value AS value ' \
+        'FROM mrn_csn_pairs ' \
+        'INNER JOIN RESPIRATIONS on mrn_csn_pairs.mrn_csn_pair = RESPIRATIONS.mrn_csn_pair ' \
+        'INNER JOIN DEMOGRAPHICS on mrn_csn_pairs.mrn_csn_pair = DEMOGRAPHICS.mrn_csn_pair ' \
+        'UNION ALL ' \
+        'SELECT mrn_csn_pairs.mrn_csn_pair AS mrn_csn_pair, ' \
+        'DEMOGRAPHICS.admission_datetime AS admit_datetime, ' \
         'IO_FLOWSHEET.recorded_datetime AS timestamp, ' \
         'IO_FLOWSHEET.Name AS measure, ' \
         'IO_FLOWSHEET.value AS value ' \
@@ -130,6 +140,15 @@ query = 'SELECT mrn_csn_pairs.mrn_csn_pair AS mrn_csn_pair, ' \
         'LABS.value AS value ' \
         'FROM mrn_csn_pairs ' \
         'INNER JOIN LABS on mrn_csn_pairs.mrn_csn_pair = LABS.mrn_csn_pair ' \
+        'INNER JOIN DEMOGRAPHICS on mrn_csn_pairs.mrn_csn_pair = DEMOGRAPHICS.mrn_csn_pair ' \
+        'UNION ALL ' \
+        'SELECT mrn_csn_pairs.mrn_csn_pair AS mrn_csn_pair, ' \
+        'DEMOGRAPHICS.admission_datetime AS admit_datetime, ' \
+        'NEURO.recorded_datetime AS timestamp, ' \
+        'NEURO.Name AS measure, ' \
+        'NEURO.value AS value ' \
+        'FROM mrn_csn_pairs ' \
+        'INNER JOIN NEURO on mrn_csn_pairs.mrn_csn_pair = NEURO.mrn_csn_pair ' \
         'INNER JOIN DEMOGRAPHICS on mrn_csn_pairs.mrn_csn_pair = DEMOGRAPHICS.mrn_csn_pair ' \
 
 dat = pd.read_sql(query, processed_conn, parse_dates=['admit_datetime', 'timestamp'])

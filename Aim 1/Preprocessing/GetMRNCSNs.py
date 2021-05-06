@@ -18,17 +18,21 @@ processed_conn = sqlite3.connect(processed_url)
 
 dat = pd.read_sql_query("SELECT mrn_csn_pair, time_in_hospital_minutes FROM DEMOGRAPHICS", processed_conn, parse_dates=True)
 
+# Only neuro admits
+#dat = pd.read_sql_query("SELECT mrn_csn_pair, time_in_hospital_minutes FROM DEMOGRAPHICS WHERE Neuro=1", processed_conn, parse_dates=True)
+
+print('All',dat['mrn_csn_pair'].unique().shape)
 # Primary stroke diagnosis
 dx = pd.read_sql_query('SELECT * FROM DX', processed_conn, parse_dates=True)
 dat = pd.merge(dat, dx, how='inner', on='mrn_csn_pair')
 dat = dat[(dat['hemorrhagic_stroke'] == 1) | (dat['ischemic_stroke'] == 1)]
-print(dat.shape)
-print(dat['mrn_csn_pair'].unique().shape)
+print( dat.shape)
+print('Stroke primary dx',dat['mrn_csn_pair'].unique().shape)
 
 # Hospital stay >= 24h
 dat = dat[dat['time_in_hospital_minutes'] >= 24*60]
 print(dat.shape)
-print(dat['mrn_csn_pair'].unique().shape)
+print('LOS >= 24h',dat['mrn_csn_pair'].unique().shape)
 
 # Pulse, BP, and pulse_ox w/in first 24h
 vitals = pd.read_sql_query(
@@ -44,6 +48,8 @@ vitals.reset_index(drop=False, inplace=True)
 vitals.groupby('mrn_csn_pair').agg('mean')
 
 dat = pd.merge(dat, vitals, how='inner', on='mrn_csn_pair')
-print(dat['mrn_csn_pair'].unique().shape)
+print('Have vitals', dat['mrn_csn_pair'].unique().shape)
+
+
 
 dat['mrn_csn_pair'].to_sql('mrn_csn_pairs', processed_conn, if_exists='replace', index=False)

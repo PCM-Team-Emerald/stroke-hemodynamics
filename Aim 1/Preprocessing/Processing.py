@@ -30,7 +30,7 @@ processed_conn = sqlite3.connect(processed_dir)
 
 to_run = {
     'ADT':          False,
-    'Demographics': False,
+    'Demographics': True,
     'Dx':           False,
     'Flowsheet':    False,
     'IO_Flowsheet': False,
@@ -41,9 +41,48 @@ to_run = {
     'Problem_List': False,
     'Neuro':        False,
     'Dispo':        False,
-    'Short_Blessed': True
+    'Short_Blessed': False,
+    'Respirations': False
 }
 
+##### Respirations #####
+if to_run['Respirations']:
+    # Read file
+    dat = pd.read_table(os.path.join(data_dir, 'respirations.txt'), sep='|')
+    
+    dat.columns = ['mrn','csn','DATE_RECORDED','recorded_datetime','value','TEMPLATE_NAME','flowsheet_row_name']
+    
+    
+    # Convert datetimes to ISO
+    datetime_cols = ['recorded_datetime']
+    dat = datetimeColToISO(dat, datetime_cols)
+    
+    dat.drop_duplicates(inplace=True, ignore_index=True)
+
+    # Read manual coding
+    mc = pd.read_csv(os.path.join(annotated_dir, 'Respirations_names.csv'))
+    dat = pd.merge(dat,mc,how='left',on='flowsheet_row_name')
+    dat_pivoted = pd.pivot_table(dat,index=['mrn','csn','recorded_datetime'],
+                                 columns='Name',values='value',aggfunc='first')
+    
+    # Processing
+    with open(os.path.join(vars_to_include_dir, 'Respirations.txt')) as f:
+        to_keep = f.read().splitlines()
+
+    dat_pivoted = dat_pivoted[to_keep]
+
+    # Remove extreme values
+    dat_pivoted['respirations'] = dat_pivoted['respirations'].apply(lambda x: np.NaN if x < 5 or x > 40 else x)
+    
+    # Melt
+    dat_melted = dat_pivoted.reset_index(drop=False).melt(id_vars=['mrn','csn','recorded_datetime'])
+
+    # MRN, CSN Pairs
+    dat_melted['mrn_csn_pair'] = dat_melted.apply(lambda x: '({}, {})'.format(x['mrn'],x['csn']), axis=1)
+
+    # Write to processed
+    dat_melted.dropna(subset=['value'], inplace=True)
+    dat_melted.to_sql('RESPIRATIONS', processed_conn, if_exists='replace', index=False)
 
 
 ##### Flowsheet #####
@@ -73,13 +112,6 @@ if to_run['Flowsheet']:
         to_keep = f.read().splitlines()
 
     dat_pivoted = dat_pivoted[to_keep]
-
-    # BPs
-    bps = dat_pivoted['bp'].str.split('/', n=1, expand=True)
-    dat_pivoted['sbp'] = bps[0]
-    dat_pivoted['dbp'] = bps[1]
-    dat_pivoted.drop(columns=['bp'], inplace=True)
-
 
     # HLM
     to_replace = ['Lying in bed (1)',
@@ -136,6 +168,8 @@ if to_run['Neuro']:
 
     # Save to db
     dat.drop_duplicates(inplace=True, ignore_index=True)
+    
+    
 
     # Read manual coding
     mc = pd.read_csv(os.path.join(annotated_dir, 'neuro_names.csv'))
@@ -296,6 +330,9 @@ if to_run['Demographics']:
     dat.columns = ['mrn', 'csn', 'admission_datetime', 'discharge_datetime', 'age', 'gender', 'race',
                    'ed_arrival_datetime', 'admit_service', 'admit_department', 'discharge_department',
                    'charlson_comorbidity_index']
+    
+    # Drop rehab services
+    dat = dat[~dat['admit_service'].isin(['SHP Rehabilitation','Physical Medicine and Rehabilitation'])]
 
     # Convert datetimes to ISO
     datetime_cols = ['admission_datetime', 'discharge_datetime', 'ed_arrival_datetime']

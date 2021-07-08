@@ -19,6 +19,7 @@ from sklearn.metrics import auc
 from sklearn.metrics import precision_recall_curve
 from sklearn.feature_selection import SelectFromModel
 from matplotlib.lines import Line2D
+import pickle
 import sys
 
 sys.path.insert(
@@ -150,8 +151,8 @@ def featureRankGLM(X_train_p, X_train_df, y_train):
 
     plt.xlabel("Feature", fontsize=18)
     plt.ylabel("GLM Coefficient", fontsize=18)
-    plt.xticks(fontsize=16)
-    plt.yticks(fontsize=16)
+    plt.xticks(fontsize=13)
+    plt.yticks(fontsize=13)
 
     return nznew, fig, ax
 
@@ -222,8 +223,8 @@ def featureRankingRF(X_train_p, X_train_df, y_train):
     plt.legend(custom_lines, lines)
     plt.xlabel("Feature", fontsize=18)
     plt.ylabel("RF Score", fontsize=18)
-    plt.xticks(fontsize=16)
-    plt.yticks(fontsize=16)
+    plt.xticks(fontsize=13)
+    plt.yticks(fontsize=13)
 
     # Retrain model with only top features
     sfm = SelectFromModel(clf, threshold=0.0003)
@@ -283,6 +284,12 @@ glm = Classifiers.LogisticRegressionModel(
     }
 )
 glm.fit(X_train_new, y_train_p)
+
+# Save model to disk
+filename = 'S:/Dehydration_stroke/Team Emerald/Working GitHub Directories/'\
+           'Michael/stroke-hemodynamics/Aim 2/Models/FullModelResults/24hr_model_glm.sav'
+pickle.dump(glm, open(filename, 'wb'))
+           
 glm_raw_preds, glm_preds, glm_score = glm.predict(X_test_new, y_test_p)
 auc_glm, pr_auc_glm, fpr_glm, tpr_glm, roc_thresholds_glm, recalls_glm, precisions_glm = get_auc_pr(
     y_test_p, glm_raw_preds
@@ -299,7 +306,12 @@ print_metrics(y_test_p, optimal_preds_glm)
 # Perform RF feature ranking
 sfm, fig, ax = featureRankingRF(X_train_p, X_train, y_train_p)
 plt.title("RF Top 20 Features (24 Hours)", fontsize=20)
+plt.tight_layout()
 plt.show()
+
+# fig.savefig('S:/Dehydration_stroke/Team Emerald/Working GitHub Directories/'\
+#             'Michael/stroke-hemodynamics/Aim 2/Models/FullModelResults/PaperFigure1.png',
+#             dpi=800)
 
 
 X_train_new = sfm.transform(X_train)
@@ -326,6 +338,12 @@ rf = Classifiers.RandomForestModel(
     }
 )
 rf.fit(X_train_p, y_train_p)
+
+# Save model to disk
+filename = 'S:/Dehydration_stroke/Team Emerald/Working GitHub Directories/'\
+           'Michael/stroke-hemodynamics/Aim 2/Models/FullModelResults/24hr_model_rf.sav'
+pickle.dump(rf, open(filename, 'wb'))
+
 rf_raw_preds, rf_preds, rf_score = rf.predict(X_test_p, y_test_p)
 
 auc_rf, pr_auc_rf, fpr, tpr, roc_thresholds, recalls, precisions = get_auc_pr(
@@ -337,6 +355,12 @@ xgb = Classifiers.XGBoostModel(
     params={"booster": "gblinear", "eta": 0.1, "max_depth": 8}
 )
 xgb.fit(X_train_p, y_train_p)
+
+# Save model to disk
+filename = 'S:/Dehydration_stroke/Team Emerald/Working GitHub Directories/'\
+           'Michael/stroke-hemodynamics/Aim 2/Models/FullModelResults/24hr_model_xgb.sav'
+pickle.dump(xgb, open(filename, 'wb'))
+
 xgb_raw_preds, xgb_preds, xgb_score = xgb.predict(X_test_p, y_test_p)
 
 auc_xgb, pr_auc_xgb, fpr_xgb, tpr_xgb, roc_thresholds_xgb, recalls_xgb, precisions_xgb = get_auc_pr(
@@ -407,6 +431,12 @@ glm = Classifiers.LogisticRegressionModel(
     }
 )
 glm.fit(X_train_new, y_train_p)
+
+# Save model to disk
+filename = 'S:/Dehydration_stroke/Team Emerald/Working GitHub Directories/'\
+           'Michael/stroke-hemodynamics/Aim 2/Models/FullModelResults/48hr_model_glm.sav'
+pickle.dump(glm, open(filename, 'wb'))
+
 glm_raw_preds, glm_preds, glm_score = glm.predict(X_test_new, y_test_p)
 auc_glm48, pr_auc_glm48, fpr_glm48, tpr_glm48, roc_thresholds_glm, recalls_glm48, precisions_glm48 = get_auc_pr(
     y_test_p, glm_raw_preds
@@ -450,6 +480,12 @@ rf = Classifiers.RandomForestModel(
     }
 )
 rf.fit(X_train_p, y_train_p)
+
+# Save model to disk
+filename = 'S:/Dehydration_stroke/Team Emerald/Working GitHub Directories/'\
+           'Michael/stroke-hemodynamics/Aim 2/Models/FullModelResults/48hr_model_rf.sav'
+pickle.dump(rf, open(filename, 'wb'))
+
 rf_raw_preds, rf_preds, rf_score = rf.predict(X_test_p, y_test_p)
 
 auc_rf48, pr_auc_rf48, fpr48, tpr48, roc_thresholds, recalls48, precisions48 = get_auc_pr(
@@ -461,6 +497,12 @@ xgb = Classifiers.XGBoostModel(
     params={"booster": "gblinear", "eta": 0.1, "max_depth": 8}
 )
 xgb.fit(X_train_p, y_train_p)
+
+# Save model to disk
+filename = 'S:/Dehydration_stroke/Team Emerald/Working GitHub Directories/'\
+           'Michael/stroke-hemodynamics/Aim 2/Models/FullModelResults/48hr_model_xgb.sav'
+pickle.dump(xgb, open(filename, 'wb'))
+
 xgb_raw_preds, xgb_preds, xgb_score = xgb.predict(X_test_p, y_test_p)
 
 auc_xgb48, pr_auc_xgb48, fpr_xgb48, tpr_xgb48, roc_thresholds_xgb, recalls_xgb48, precisions_xgb48 = get_auc_pr(
@@ -533,6 +575,12 @@ glm = Classifiers.LogisticRegressionModel(
     }
 )
 glm.fit(X_train_new, y_train_p)
+
+# Save model to disk
+filename = 'S:/Dehydration_stroke/Team Emerald/Working GitHub Directories/'\
+           'Michael/stroke-hemodynamics/Aim 2/Models/FullModelResults/72hr_model_glm.sav'
+pickle.dump(glm, open(filename, 'wb'))
+
 glm_raw_preds, glm_preds, glm_score = glm.predict(X_test_new, y_test_p)
 auc_glm72, pr_auc_glm72, fpr_glm72, tpr_glm72, roc_thresholds_glm, recalls_glm72, precisions_glm72 = get_auc_pr(
     y_test_p, glm_raw_preds
@@ -576,6 +624,12 @@ rf = Classifiers.RandomForestModel(
     }
 )
 rf.fit(X_train_p, y_train_p)
+
+# Save model to disk
+filename = 'S:/Dehydration_stroke/Team Emerald/Working GitHub Directories/'\
+           'Michael/stroke-hemodynamics/Aim 2/Models/FullModelResults/72hr_model_rf.sav'
+pickle.dump(rf, open(filename, 'wb'))
+
 rf_raw_preds, rf_preds, rf_score = rf.predict(X_test_p, y_test_p)
 
 auc_rf72, pr_auc_rf72, fpr72, tpr72, roc_thresholds, recalls72, precisions72 = get_auc_pr(
@@ -587,6 +641,12 @@ xgb = Classifiers.XGBoostModel(
     params={"booster": "gblinear", "eta": 0.1, "max_depth": 8}
 )
 xgb.fit(X_train_p, y_train_p)
+
+# Save model to disk
+filename = 'S:/Dehydration_stroke/Team Emerald/Working GitHub Directories/'\
+           'Michael/stroke-hemodynamics/Aim 2/Models/FullModelResults/72hr_model_xgb.sav'
+pickle.dump(xgb, open(filename, 'wb'))
+
 xgb_raw_preds, xgb_preds, xgb_score = xgb.predict(X_test_p, y_test_p)
 
 auc_xgb72, pr_auc_xgb72, fpr_xgb72, tpr_xgb72, roc_thresholds_xgb, recalls_xgb72, precisions_xgb72 = get_auc_pr(
@@ -743,3 +803,8 @@ plt.legend(
 
 plt.tight_layout()
 plt.show()
+
+# fig.savefig('S:/Dehydration_stroke/Team Emerald/Working GitHub Directories/'\
+#            'Michael/stroke-hemodynamics/Aim 2/Models/FullModelResults/PaperFigure2.png',
+#             dpi=800)
+

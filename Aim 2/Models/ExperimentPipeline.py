@@ -22,6 +22,7 @@ from sklearn.metrics import auc
 from sklearn.metrics import precision_recall_curve
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import make_pipeline
+import pickle
 import sys
 
 sys.path.insert(
@@ -239,14 +240,18 @@ def featureRankingRF(X_train_p, X_train_df, y_train):
 ######## Load Dataset ########
 
 # Select data to run
-path = "C:\\Users\\mainswo3\\Downloads\\complete_24h_norehab_new.csv"
+#path = "C:\\Users\\mainswo3\\Downloads\\complete_24h_norehab_new.csv"
 
 # path = 'C:\\Users\\mainswo3\\Downloads\\complete_24h_norehab_new.csv'
 # path = 'C:\\Users\\mainswo3\\Downloads\\complete_48h_norehab_new.csv'
 # path = 'C:\\Users\\mainswo3\\Downloads\\complete_72h_norehab_new.csv'
 
+# Use below path to run with GCS data
+path = 'C:\\Users\\mainswo3\\Downloads\\complete_24h_min_gcs_new.csv'
+# path = 'C:\\Users\\mainswo3\\Downloads\\complete_24h_72h_min_gcs_new.csv'
+
 df = pd.read_csv(path)
-# df = df.drop('Unnamed: 0', axis=1)
+df = df.drop('Unnamed: 0', axis=1)
 
 ####
 # Use if there is null values!!
@@ -254,8 +259,10 @@ df = pd.read_csv(path)
 ####
 
 # Create X and y varables, remove label from X data
-y = df["LOS"]
-X = df.drop(["LOS", "mrn_csn_pair"], axis=1)
+# y = df["LOS"]
+# X = df.drop(["LOS", "mrn_csn_pair"], axis=1)
+y = df["bin_min_gcs"]
+X = df.drop(["bin_min_gcs", "mrn_csn_pair"], axis=1)
 print("Shape of X data: ", X.shape)
 print("Shape of X data: ", y.shape)
 
@@ -460,6 +467,11 @@ glm = Classifiers.LogisticRegressionModel(
     }
 )
 glm.fit(X_train_new, y_train_p)
+
+filename = 'S:/Dehydration_stroke/Team Emerald/Working GitHub Directories/'\
+           'Michael/stroke-hemodynamics/Aim 2/Models/FullModelResults/gcs_24hr_model_glm.sav'
+pickle.dump(glm, open(filename, 'wb'))
+
 glm_raw_preds, glm_preds, glm_score = glm.predict(X_test_new, y_test_p)
 auc_glm, pr_auc_glm, fpr_glm, tpr_glm, roc_thresholds_glm, recalls_glm, precisions_glm = get_auc_pr(
     y_test_p, glm_raw_preds
@@ -530,6 +542,11 @@ rf = Classifiers.RandomForestModel(
     }
 )
 rf.fit(X_train_p, y_train_p)
+
+filename = 'S:/Dehydration_stroke/Team Emerald/Working GitHub Directories/'\
+           'Michael/stroke-hemodynamics/Aim 2/Models/FullModelResults/gcs_24hr_model_rf.sav'
+pickle.dump(rf, open(filename, 'wb'))
+
 rf_raw_preds, rf_preds, rf_score = rf.predict(X_test_p, y_test_p)
 
 auc_rf, pr_auc_rf, fpr, tpr, roc_thresholds, recalls, precisions = get_auc_pr(
@@ -539,6 +556,11 @@ auc_rf, pr_auc_rf, fpr, tpr, roc_thresholds, recalls, precisions = get_auc_pr(
 
 xgb = Classifiers.XGBoostModel(params={**best_params_xg_updated})
 xgb.fit(X_train_p, y_train_p)
+
+filename = 'S:/Dehydration_stroke/Team Emerald/Working GitHub Directories/'\
+           'Michael/stroke-hemodynamics/Aim 2/Models/FullModelResults/gcs_24hr_model_xgb.sav'
+pickle.dump(xgb, open(filename, 'wb'))
+
 xgb_raw_preds, xgb_preds, xgb_score = xgb.predict(X_test_p, y_test_p)
 
 auc_xgb, pr_auc_xgb, fpr_xgb, tpr_xgb, roc_thresholds_xgb, recalls_xgb, precisions_xgb = get_auc_pr(
@@ -685,3 +707,8 @@ plt.legend(
 )
 plt.tight_layout()
 plt.show()
+
+# fig.savefig('S:/Dehydration_stroke/Team Emerald/Working GitHub Directories/'\
+#             'Michael/stroke-hemodynamics/Aim 2/Models/FullModelResults/PaperFigure3.png',
+#            dpi=800)
+    

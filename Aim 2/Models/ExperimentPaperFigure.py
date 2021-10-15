@@ -88,7 +88,7 @@ def getCat(x):
         return "other"
 
 
-def featureRankGLM(X_train_p, X_train_df, y_train):
+def featureRankGLM(X_train_p, X_train_df, y_train, hours):
     """
     Perform feature ranking using a GLM. Figure will be generated depicting the
     top 20 scoring features. Returns variable to create new feature space and 
@@ -98,6 +98,13 @@ def featureRankGLM(X_train_p, X_train_df, y_train):
     """
     clf = LogisticRegression(penalty="l1", C=0.1, solver="liblinear", max_iter=200)
     clf.fit(X_train_p, y_train)
+    
+
+    # Save model to disk
+    filename = 'S:/Dehydration_stroke/Team Emerald/Working GitHub Directories/'\
+               'Michael/stroke-hemodynamics/Aim 2/Models/FullModelResults/UpdatedResults/TEST_GLM_Features_' + str(hours) + '.sav'
+    pickle.dump(clf, open(filename, 'wb'))
+          
 
     num_features = X_train_df.shape[1]
     zero_feat = []
@@ -157,7 +164,7 @@ def featureRankGLM(X_train_p, X_train_df, y_train):
     return nznew, fig, ax
 
 
-def featureRankingRF(X_train_p, X_train_df, y_train):
+def featureRankingRF(X_train_p, X_train_df, y_train, hours):
     """
     Perform feature ranking using a RF. Figure will be generated depicting the
     top 20 scoring features. Returns variable to create new feature space and 
@@ -174,6 +181,13 @@ def featureRankingRF(X_train_p, X_train_df, y_train):
         max_features=2,
     )
     clf.fit(X_train_p, y_train_p)
+    
+    
+    # Save model to disk
+    filename = 'S:/Dehydration_stroke/Team Emerald/Working GitHub Directories/'\
+               'Michael/stroke-hemodynamics/Aim 2/Models/FullModelResults/UpdatedResults/TEST_RF_Features_' + str(hours) + '_1.sav'
+    pickle.dump(clf, open(filename, 'wb'))
+    
 
     rf_features = []
     for feature in zip(feat_labels, clf.feature_importances_):
@@ -230,6 +244,12 @@ def featureRankingRF(X_train_p, X_train_df, y_train):
     sfm = SelectFromModel(clf, threshold=0.0003)
     sfm.fit(X_train, y_train)
 
+    
+    # Save model to disk
+    filename = 'S:/Dehydration_stroke/Team Emerald/Working GitHub Directories/'\
+               'Michael/stroke-hemodynamics/Aim 2/Models/FullModelResults/UpdatedResults/TEST_RF_Features_' + str(hours) + '_2.sav'
+    pickle.dump(sfm, open(filename, 'wb'))
+    
     return sfm, fig, ax
 
 
@@ -243,7 +263,7 @@ df = pd.read_csv(path)
 y = df["LOS"]
 X = df.drop(["LOS", "mrn_csn_pair"], axis=1)
 print("Shape of X data: ", X.shape)
-print("Shape of X data: ", y.shape)
+print("Shape of y data: ", y.shape)
 
 
 # Run a train test split on the data
@@ -259,7 +279,7 @@ y_test_p = np.squeeze(y_test.to_numpy())
 
 
 # Perform GLM feature ranking
-nznew, fig, ax = featureRankGLM(X_train_p, X_train, y_train_p)
+nznew, fig, ax = featureRankGLM(X_train_p, X_train, y_train_p, 24)
 
 plt.title("GLM Top 20 Features (24 Hours)", fontsize=20)
 plt.show()
@@ -272,6 +292,7 @@ X_glm_test = X_test[features_used]
 X_train_new = preprocessing.scale(X_glm_train)
 X_test_new = preprocessing.scale(X_glm_test)
 
+print("Shape of X data GLM fr: ", X_train_new.shape)
 
 # Use new features to train GLM model
 glm = Classifiers.LogisticRegressionModel(
@@ -285,11 +306,13 @@ glm = Classifiers.LogisticRegressionModel(
 )
 glm.fit(X_train_new, y_train_p)
 
+
 # Save model to disk
 filename = 'S:/Dehydration_stroke/Team Emerald/Working GitHub Directories/'\
-           'Michael/stroke-hemodynamics/Aim 2/Models/FullModelResults/24hr_model_glm.sav'
+           'Michael/stroke-hemodynamics/Aim 2/Models/FullModelResults/UpdatedResults/TEST24hr_model_glm.sav'
 pickle.dump(glm, open(filename, 'wb'))
-           
+
+
 glm_raw_preds, glm_preds, glm_score = glm.predict(X_test_new, y_test_p)
 auc_glm, pr_auc_glm, fpr_glm, tpr_glm, roc_thresholds_glm, recalls_glm, precisions_glm = get_auc_pr(
     y_test_p, glm_raw_preds
@@ -304,7 +327,7 @@ print_metrics(y_test_p, optimal_preds_glm)
 
 
 # Perform RF feature ranking
-sfm, fig, ax = featureRankingRF(X_train_p, X_train, y_train_p)
+sfm, fig, ax = featureRankingRF(X_train_p, X_train, y_train_p, 24)
 plt.title("RF Top 20 Features (24 Hours)", fontsize=20)
 plt.tight_layout()
 plt.show()
@@ -317,6 +340,7 @@ plt.show()
 X_train_new = sfm.transform(X_train)
 X_test_new = sfm.transform(X_test)
 
+print("Shape of X data RF fr: ", X_train_new.shape)
 
 # Scale and normalize raw data
 X_train_p = preprocessing.scale(X_train_new)
@@ -339,10 +363,12 @@ rf = Classifiers.RandomForestModel(
 )
 rf.fit(X_train_p, y_train_p)
 
+
 # Save model to disk
 filename = 'S:/Dehydration_stroke/Team Emerald/Working GitHub Directories/'\
-           'Michael/stroke-hemodynamics/Aim 2/Models/FullModelResults/24hr_model_rf.sav'
+           'Michael/stroke-hemodynamics/Aim 2/Models/FullModelResults/UpdatedResults/TEST24hr_model_rf.sav'
 pickle.dump(rf, open(filename, 'wb'))
+
 
 rf_raw_preds, rf_preds, rf_score = rf.predict(X_test_p, y_test_p)
 
@@ -356,10 +382,12 @@ xgb = Classifiers.XGBoostModel(
 )
 xgb.fit(X_train_p, y_train_p)
 
+
 # Save model to disk
 filename = 'S:/Dehydration_stroke/Team Emerald/Working GitHub Directories/'\
-           'Michael/stroke-hemodynamics/Aim 2/Models/FullModelResults/24hr_model_xgb.sav'
+           'Michael/stroke-hemodynamics/Aim 2/Models/FullModelResults/UpdatedResults/TEST24hr_model_xgb.sav'
 pickle.dump(xgb, open(filename, 'wb'))
+
 
 xgb_raw_preds, xgb_preds, xgb_score = xgb.predict(X_test_p, y_test_p)
 
@@ -406,7 +434,7 @@ y_test_p = np.squeeze(y_test.to_numpy())
 
 
 # Perform GLM feature ranking
-nznew, fig, ax = featureRankGLM(X_train_p, X_train, y_train_p)
+nznew, fig, ax = featureRankGLM(X_train_p, X_train, y_train_p, 48)
 
 plt.title("GLM Top 20 Features (48 Hours)", fontsize=20)
 plt.show()
@@ -432,10 +460,12 @@ glm = Classifiers.LogisticRegressionModel(
 )
 glm.fit(X_train_new, y_train_p)
 
+
 # Save model to disk
 filename = 'S:/Dehydration_stroke/Team Emerald/Working GitHub Directories/'\
-           'Michael/stroke-hemodynamics/Aim 2/Models/FullModelResults/48hr_model_glm.sav'
+           'Michael/stroke-hemodynamics/Aim 2/Models/FullModelResults/UpdatedResults/TEST48hr_model_glm.sav'
 pickle.dump(glm, open(filename, 'wb'))
+
 
 glm_raw_preds, glm_preds, glm_score = glm.predict(X_test_new, y_test_p)
 auc_glm48, pr_auc_glm48, fpr_glm48, tpr_glm48, roc_thresholds_glm, recalls_glm48, precisions_glm48 = get_auc_pr(
@@ -451,7 +481,7 @@ print_metrics(y_test_p, optimal_preds_glm)
 
 
 # Perform RF feature ranking
-sfm, fig, ax = featureRankingRF(X_train_p, X_train, y_train_p)
+sfm, fig, ax = featureRankingRF(X_train_p, X_train, y_train_p, 48)
 plt.title("RF Top 20 Features (48 Hours)", fontsize=20)
 plt.show()
 
@@ -481,10 +511,12 @@ rf = Classifiers.RandomForestModel(
 )
 rf.fit(X_train_p, y_train_p)
 
+
 # Save model to disk
 filename = 'S:/Dehydration_stroke/Team Emerald/Working GitHub Directories/'\
-           'Michael/stroke-hemodynamics/Aim 2/Models/FullModelResults/48hr_model_rf.sav'
+           'Michael/stroke-hemodynamics/Aim 2/Models/FullModelResults/UpdatedResults/TEST48hr_model_rf.sav'
 pickle.dump(rf, open(filename, 'wb'))
+
 
 rf_raw_preds, rf_preds, rf_score = rf.predict(X_test_p, y_test_p)
 
@@ -498,10 +530,12 @@ xgb = Classifiers.XGBoostModel(
 )
 xgb.fit(X_train_p, y_train_p)
 
+
 # Save model to disk
 filename = 'S:/Dehydration_stroke/Team Emerald/Working GitHub Directories/'\
-           'Michael/stroke-hemodynamics/Aim 2/Models/FullModelResults/48hr_model_xgb.sav'
+           'Michael/stroke-hemodynamics/Aim 2/Models/FullModelResults/UpdatedResults/TEST48hr_model_xgb.sav'
 pickle.dump(xgb, open(filename, 'wb'))
+
 
 xgb_raw_preds, xgb_preds, xgb_score = xgb.predict(X_test_p, y_test_p)
 
@@ -550,7 +584,7 @@ y_test_p = np.squeeze(y_test.to_numpy())
 
 
 # Perform GLM feature ranking
-nznew, fig, ax = featureRankGLM(X_train_p, X_train, y_train_p)
+nznew, fig, ax = featureRankGLM(X_train_p, X_train, y_train_p, 72)
 
 plt.title("GLM Top 20 Features (72 Hours)", fontsize=20)
 plt.show()
@@ -576,10 +610,12 @@ glm = Classifiers.LogisticRegressionModel(
 )
 glm.fit(X_train_new, y_train_p)
 
+
 # Save model to disk
 filename = 'S:/Dehydration_stroke/Team Emerald/Working GitHub Directories/'\
-           'Michael/stroke-hemodynamics/Aim 2/Models/FullModelResults/72hr_model_glm.sav'
+           'Michael/stroke-hemodynamics/Aim 2/Models/FullModelResults/UpdatedResults/TEST72hr_model_glm.sav'
 pickle.dump(glm, open(filename, 'wb'))
+
 
 glm_raw_preds, glm_preds, glm_score = glm.predict(X_test_new, y_test_p)
 auc_glm72, pr_auc_glm72, fpr_glm72, tpr_glm72, roc_thresholds_glm, recalls_glm72, precisions_glm72 = get_auc_pr(
@@ -595,7 +631,7 @@ print_metrics(y_test_p, optimal_preds_glm)
 
 
 # Perform RF feature ranking
-sfm, fig, ax = featureRankingRF(X_train_p, X_train, y_train_p)
+sfm, fig, ax = featureRankingRF(X_train_p, X_train, y_train_p, 72)
 plt.title("RF Top 20 Features (72 Hours)", fontsize=20)
 plt.show()
 
@@ -625,10 +661,12 @@ rf = Classifiers.RandomForestModel(
 )
 rf.fit(X_train_p, y_train_p)
 
+
 # Save model to disk
 filename = 'S:/Dehydration_stroke/Team Emerald/Working GitHub Directories/'\
-           'Michael/stroke-hemodynamics/Aim 2/Models/FullModelResults/72hr_model_rf.sav'
+           'Michael/stroke-hemodynamics/Aim 2/Models/FullModelResults/UpdatedResults/TEST72hr_model_rf.sav'
 pickle.dump(rf, open(filename, 'wb'))
+
 
 rf_raw_preds, rf_preds, rf_score = rf.predict(X_test_p, y_test_p)
 
@@ -642,10 +680,12 @@ xgb = Classifiers.XGBoostModel(
 )
 xgb.fit(X_train_p, y_train_p)
 
+
 # Save model to disk
 filename = 'S:/Dehydration_stroke/Team Emerald/Working GitHub Directories/'\
-           'Michael/stroke-hemodynamics/Aim 2/Models/FullModelResults/72hr_model_xgb.sav'
+           'Michael/stroke-hemodynamics/Aim 2/Models/FullModelResults/UpdatedResults/TEST72hr_model_xgb.sav'
 pickle.dump(xgb, open(filename, 'wb'))
+
 
 xgb_raw_preds, xgb_preds, xgb_score = xgb.predict(X_test_p, y_test_p)
 
